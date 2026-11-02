@@ -53,6 +53,30 @@ function makeCtx() {
   check('没配库时为空串', text === '', text)
 }
 
+// 2b. 关掉开关：一个字都不注入
+{
+  const { ctx, state } = makeCtx()
+  apply(ctx, { root: SAMPLE, prompt: { enabled: false } })
+  const text = state.sections[0].text()
+  check('关掉后为空串', text === '', text)
+}
+
+// 2c. 用自己的整段文本（override 优先于自动主题词）
+{
+  const { ctx, state } = makeCtx()
+  apply(ctx, { root: SAMPLE, prompt: { enabled: true, override: '要查库。' } })
+  check('override 原样生效', state.sections[0].text() === '要查库。', state.sections[0].text())
+}
+
+// 2d. 追加一句（extra 接在自动内容后面）
+{
+  const { ctx, state } = makeCtx()
+  apply(ctx, { root: SAMPLE, prompt: { enabled: true, extra: '不确定时先查库。' } })
+  await state.definition.execute({ mode: 'list', limit: 1 }, {})
+  const text = state.sections[0].text()
+  check('extra 追加在末尾', text.includes('主题：') && text.endsWith('\n不确定时先查库。'), JSON.stringify(text))
+}
+
 // 3. 设置页读的 /state 里必须真有这份清单（不然页面显示不出来）
 {
   const { ctx, state } = makeCtx()
@@ -71,7 +95,8 @@ function makeCtx() {
   check('/state 的 topics 每项有 tag 和 count',
     payload.topics.length > 0 && typeof payload.topics[0].tag === 'string' && typeof payload.topics[0].count === 'number',
     JSON.stringify(payload.topics?.[0]))
-  check('/state 带 topicLine 一行文本', typeof payload.topicLine === 'string' && payload.topicLine.includes('主题'), String(payload.topicLine))
+  check('/state 带 topicPreview 一行文本', typeof payload.topicPreview === 'string' && payload.topicPreview.includes('主题'), String(payload.topicPreview))
+  check('/state 带 prompt 配置', payload.prompt !== null && typeof payload.prompt === 'object' && payload.prompt.enabled === true, JSON.stringify(payload.prompt))
 }
 
 if (failed > 0) {
