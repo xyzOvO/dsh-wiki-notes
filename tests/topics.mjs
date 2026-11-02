@@ -53,8 +53,29 @@ function makeCtx() {
   check('没配库时为空串', text === '', text)
 }
 
+// 3. 设置页读的 /state 里必须真有这份清单（不然页面显示不出来）
+{
+  const { ctx, state } = makeCtx()
+  const routes = []
+  ctx.webServer = { register: (route) => { routes.push(route); return () => {} } }
+  apply(ctx, { root: SAMPLE })
+  await state.definition.execute({ mode: 'list', limit: 1 }, {})
+
+  let body = ''
+  const req = { url: '/api/wiki-notes/state', method: 'GET' }
+  const res = { writeHead() {}, setHeader() {}, end(text) { body = text } }
+  await routes[0].handler(req, res)
+
+  const payload = JSON.parse(body)
+  check('/state 带 topics 数组', Array.isArray(payload.topics), typeof payload.topics)
+  check('/state 的 topics 每项有 tag 和 count',
+    payload.topics.length > 0 && typeof payload.topics[0].tag === 'string' && typeof payload.topics[0].count === 'number',
+    JSON.stringify(payload.topics?.[0]))
+  check('/state 带 topicLine 一行文本', typeof payload.topicLine === 'string' && payload.topicLine.includes('主题'), String(payload.topicLine))
+}
+
 if (failed > 0) {
   process.stderr.write(`topics smoke 失败 ${failed} 项\n`)
   process.exit(1)
 }
-console.log('topics smoke 全部通过（5 项）')
+console.log('topics smoke 全部通过（8 项）')
