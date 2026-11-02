@@ -45,7 +45,8 @@ function makeCtx() {
   const section = state.sections[0]
   check('段名固定', section?.name === 'wiki-notes:topics', String(section?.name))
   const text = typeof section?.text === 'function' ? section.text() : ''
-  check('格式对：本地知识库 N 页，主题：…', /^本地知识库 \d+ 页，主题：/.test(text), text)
+  check('格式对：本地知识库主题：…（不带页数，页数变动不该打掉前缀缓存）', /^本地知识库主题：/.test(text), text)
+  check('不带「N 页」（页数在设置页看，不在提示词里）', !/\d+\s*页/.test(text), text)
   check('点出了样例库的标签 AI', text.includes('AI'), text)
   check('长度有上限（≤ 130 字符）', text.length <= 130, `${text.length} 字符`)
 }
