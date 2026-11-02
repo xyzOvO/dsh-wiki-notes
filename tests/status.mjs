@@ -336,4 +336,12 @@ ok('非 ok 时 warnings 渲染成「本次结果有缺口」块', () => {
   assert.match(text, /标题命中查询词/)
 })
 
+ok('degraded 的说明只说一遍（warnings 与 note 不能重复）', () => {
+  const value = run(corpus, { mode: 'search', query: '上下文 量子纠缠' })
+  assert.equal(value.status, 'degraded')
+  const text = render({ mode: 'search' }, value)
+  const times = text.split('降级').length - 1
+  assert.equal(times, 1, `「降级」出现了 ${times} 次：\n${text}`)
+})
+
 console.log(`\n[status] 全部通过（${passed} 项）`)
