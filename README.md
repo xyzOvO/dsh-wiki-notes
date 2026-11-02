@@ -52,9 +52,16 @@ token 成本是线性叠加的。
 
 ### 进料：[Obsidian Web Clipper](https://github.com/obsidianmd/obsidian-clipper)
 
-Obsidian 官方的浏览器扩展：[Chrome](https://chromewebstore.google.com/detail/obsidian-web-clipper/cnjifjpddelmedmihgijeibhnjfabmlf) / [Firefox](https://addons.mozilla.org/en-US/firefox/addon/web-clipper-obsidian/) / [Safari](https://apps.apple.com/us/app/obsidian-web-clipper/id6720708363) / [Edge](https://microsoftedge.microsoft.com/addons/detail/obsidian-web-clipper/eigdjhmgnaaeaonimdklocfekkaanfme)。
+Obsidian 官方的浏览器扩展，TypeScript 写的：[Chrome](https://chromewebstore.google.com/detail/obsidian-web-clipper/cnjifjpddelmedmihgijeibhnjfabmlf) / [Firefox](https://addons.mozilla.org/en-US/firefox/addon/web-clipper-obsidian/) / [Safari](https://apps.apple.com/us/app/obsidian-web-clipper/id6720708363) / [Edge](https://microsoftedge.microsoft.com/addons/detail/obsidian-web-clipper/eigdjhmgnaaeaonimdklocfekkaanfme)。
 
-看到好文章，划重点、点一下，正文连同高亮变成 Markdown 直接落进 `原始资料-raw/`。模板 + 变量 + 过滤器能让「来源、日期、标签」自动写进 frontmatter —— 这一步的收益不在省事，在于 **raw 层的元数据质量决定了后面 LLM 能榨出多少**。
+看到好文章，划重点、点一下，正文连同高亮变成 Markdown 直接落进 `原始资料-raw/`。真正有用的三件：
+
+- **模板（templates）** —— 每类来源一套。论文一套、博客一套、文档一套，落点目录和字段名都写死在模板里。
+- **变量（variables）** —— `{{title}}` `{{url}}` `{{date}}` `{{author}}` 这类占位符，剪的时候自动填。
+- **过滤器（filters）** —— 把导航、广告、评论区剥掉，只留正文。
+- 图片也能顺手本地化（1.8.0 起），不怕原站挂掉之后图全裂。
+
+**它跟本插件的接口其实是 frontmatter。** 模板里写下 `类型: 资料`、`来源数量: 1`、`标签: [...]`，`wiki_recall` 才有东西可排序 —— 返回里的 `kind`、`sources`、证据强度提示，全靠这几个字段喂。模板写得细，检索就准；模板空着，检索就只剩全文关键词匹配这一条腿。
 
 > Karpathy 那篇 gist 的「Tips and tricks」第一条推的就是它。
 
