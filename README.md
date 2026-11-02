@@ -64,9 +64,9 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 | --- | --- | --- |
 | `search`（默认） | 关键词 AND 检索 | `query`、`limit`（5，≤12）、`sectionChars`（900，≤3000） |
 | `page` | 按页名/别名取整页 | `name`、`pageChars`（6000） |
-| `list` | 按类型/标签/状态列目录 | `type`、`tags`、`status`、`limit`（40） |
-| `overview` | 总览 + 规模行 + 最近日志 + 健康计数 | — |
-| `lint` | 库健康检查：孤儿页、断链名字、缺字段、别名冲突、久未更新、无出链、草稿、index 与磁盘不一致 | `limit`（8）、`staleDays`（120） |
+| `list` | 按类型/标签/状态列目录 | `type`、`tags`、`status`、`limit`（40，≤200） |
+| `overview` | 总览 + 规模行 + 最近日志 + 健康计数 | `pageChars`（4000）、`logLimit`（5，≤20） |
+| `lint` | 库健康检查：孤儿页、断链名字、缺字段、别名冲突、久未更新、无出链、草稿、index 与磁盘不一致 | `limit`（8，≤40）、`staleDays`（120） |
 | `draft` | 把好答案回写成新页的落盘骨架（目录、frontmatter、index 行、log 条），不写文件 | `title`、`type`、`tags`、`summary`、`sources` |
 
 ```jsonc
