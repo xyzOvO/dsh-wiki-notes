@@ -5,6 +5,9 @@
  * 这里钉三件事：格式对、长度有上限、库没配时是空串。
  */
 
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { apply } from '../lib/index.js'
 
@@ -99,14 +102,15 @@ function makeCtx() {
   check('/state 带 prompt 配置', payload.prompt !== null && typeof payload.prompt === 'object' && payload.prompt.enabled === true, JSON.stringify(payload.prompt))
 }
 
-// 5. 阈值：默认只留出现 >=2 次的标签；minCount:1 时一次性标签也进来
+// 5. 阈值：只留出现 >=2 次的标签；minCount:1 时一次性标签也进来
+//    这里显式传 topics，不受本机配置文件影响（设置页可能把阈值关掉过）
 {
   const { ctx, state } = makeCtx()
-  apply(ctx, { root: SAMPLE })
+  apply(ctx, { root: SAMPLE, topics: { minCount: 2 } })
   await state.definition.execute({ mode: 'list', limit: 1 }, {})
   const line = state.sections[0].text()
-  check('默认阈值：出现一次的标签不进主题词', !line.includes('训练') && !line.includes('检索'), line)
-  check('默认阈值：AI 还在（×5）', line.includes('AI'), line)
+  check('阈值 2：出现一次的标签不进主题词', !line.includes('训练') && !line.includes('检索'), line)
+  check('阈值 2：AI 还在（×5）', line.includes('AI'), line)
 }
 
 {
@@ -117,8 +121,70 @@ function makeCtx() {
   check('minCount:1 时一次性标签也参与排名', line.includes('训练') || line.includes('检索'), line)
 }
 
+// 6. 大小写归并：RAG 与 rag 是同一个主题
+{
+  const dir = mkdtempSync(path.join(tmpdir(), 'wn-case-'))
+  const wiki = path.join(dir, '知识层-wiki')
+  mkdirSync(wiki, { recursive: true })
+  writeFileSync(path.join(wiki, 'index.md'), '# 索引\n')
+  const page = (name, tags) => writeFileSync(
+    path.join(wiki, name + '.md'),
+    '---\n类型: 概念\n标签: [' + tags + ']\n状态: 草稿\n更新: 2026-11-02\n---\n\n正文\n',
+  )
+  page('a', 'RAG, 向量')
+  page('b', 'rag, 向量')
+  page('c', 'LLM')
+
+  const { ctx, state } = makeCtx()
+  ctx.webServer = { register: (route) => { state.route = route; return () => {} } }
+  apply(ctx, { root: wiki, topics: { minCount: 2 } })
+  await state.definition.execute({ mode: 'list', limit: 1 }, {})
+  const line = state.sections[0].text()
+  check('大小写不同的同一个主题只出现一次', !(line.includes('RAG') && line.includes('rag')), line)
+
+  let payload = ''
+  await state.route.handler(
+    { url: '/api/wiki-notes/state', method: 'GET' },
+    { writeHead() {}, setHeader() {}, end(text) { payload = text } },
+  )
+  const topics = JSON.parse(payload).topics
+  const rag = topics.find((item) => item.tag.toLowerCase() === 'rag')
+  check('归并后 RAG 计数为 2', (rag?.count ?? 0) === 2, JSON.stringify(topics))
+  rmSync(dir, { recursive: true, force: true })
+}
+
+// 7. 阈值没生效时要如实标记（所有标签都只出现一次 → 退回不过滤）
+{
+  const dir = mkdtempSync(path.join(tmpdir(), 'wn-thin-'))
+  const wiki = path.join(dir, '知识层-wiki')
+  mkdirSync(wiki, { recursive: true })
+  writeFileSync(path.join(wiki, 'index.md'), '# 索引\n')
+  for (const tag of ['甲', '乙', '丙']) {
+    writeFileSync(
+      path.join(wiki, tag + '.md'),
+      '---\n类型: 概念\n标签: [' + tag + ']\n状态: 草稿\n更新: 2026-11-02\n---\n\n正文\n',
+    )
+  }
+  const { ctx, state } = makeCtx()
+  ctx.webServer = { register: (route) => { state.route = route; return () => {} } }
+  apply(ctx, { root: wiki, topics: { minCount: 2 } })
+  await state.definition.execute({ mode: 'list', limit: 1 }, {})
+
+  let body = ''
+  await state.route.handler(
+    { url: '/api/wiki-notes/state', method: 'GET' },
+    { writeHead() {}, setHeader() {}, end(text) { body = text } },
+  )
+  const payload = JSON.parse(body)
+  check('标签全是一次时 fallback 为 true', payload.topicFilter.fallback === true, JSON.stringify(payload.topicFilter))
+  check('此时仍然给出主题词（保底）', payload.topics.length === 3, JSON.stringify(payload.topics))
+  rmSync(dir, { recursive: true, force: true })
+}
+
 if (failed > 0) {
   process.stderr.write(`topics smoke 失败 ${failed} 项\n`)
   process.exit(1)
 }
-console.log('topics smoke 全部通过（12 项）')
+console.log('topics smoke 全部通过（16 项）')
+// 测试里 apply 会建目录监听；临时库删掉后监听可能残留，显式收尾更稳
+process.exit(0)
