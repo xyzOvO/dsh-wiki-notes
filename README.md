@@ -25,7 +25,7 @@ Built for [DeepSeek Harness](https://github.com/deepseek-ai). Instead of a 5-ste
 
 ## 库该长什么样
 
-**一个目录 + 一堆 `.md` 就能用。** 更细的约定见 [docs/库结构.md](docs/库结构.md)：frontmatter 七字段、`index.md` 摘要目录、`log.md` 时间线、`总览-overview.md`，满足得越多检索越准。可跑的样例在 [`examples/sample-wiki/`](examples/sample-wiki/)。
+**一个目录 + 一堆 `.md` 就能用。** 更细的约定见 [docs/库结构.md](docs/库结构.md)：frontmatter 七字段（英文写法 `title/type/tags/aliases/status/created/updated/sources` 也认）、`index.md` 摘要目录、`log.md` 时间线、`总览-overview.md`，满足得越多检索越准。可跑的样例在 [`examples/sample-wiki/`](examples/sample-wiki/)。
 
 路径指到上一层（比如 `LLM-Wiki/`，里面还有 `原始资料-raw/` 和 `知识层-wiki/`）也没关系：插件会认 `index.md`，自动下钻到知识层，并在返回里注明它实际读的是哪一层。
 
