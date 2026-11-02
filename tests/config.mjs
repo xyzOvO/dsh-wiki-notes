@@ -12,6 +12,8 @@ import {
   PROMPT_MAX_CHARS,
   readConfigFile,
   readPromptConfig,
+  readTopicConfig,
+  writeTopicConfig,
   writeConfigFile,
   writePromptConfig,
 } from '../lib/config.js'
@@ -61,6 +63,19 @@ const kept = JSON.parse(readFileSync(path.join(dir, 'wiki-notes.config.json'), '
 check('未知字段被保留', kept.note === '手写的', JSON.stringify(kept))
 
 rmSync(dir, { recursive: true, force: true })
+
+// 9. 主题词配置：单独写，不碰路径与提示词（上一个临时目录已删，这里另起一个）
+const dir2 = mkdtempSync(path.join(tmpdir(), 'wiki-notes-topic-'))
+writeConfigFile(dir2, 'D:/notes/wiki')
+writePromptConfig(dir2, { enabled: true, override: '', extra: '加一句' })
+writeTopicConfig(dir2, { minCount: 1 })
+check('写主题词后路径还在', readConfigFile(dir2) === 'D:/notes/wiki', readConfigFile(dir2))
+check('写主题词后提示词还在', readPromptConfig(dir2).extra === '加一句', JSON.stringify(readPromptConfig(dir2)))
+check('minCount 读得回来', readTopicConfig(dir2).minCount === 1, JSON.stringify(readTopicConfig(dir2)))
+writeTopicConfig(dir2, { minCount: 99 })
+check('minCount 超上限被夹到 20', readTopicConfig(dir2).minCount === 20, JSON.stringify(readTopicConfig(dir2)))
+check('stopwords 缺省为开', readTopicConfig(dir2).stopwords === true)
+rmSync(dir2, { recursive: true, force: true })
 
 if (failed > 0) {
   process.stderr.write(`config smoke 失败 ${failed} 项\n`)

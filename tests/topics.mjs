@@ -99,8 +99,26 @@ function makeCtx() {
   check('/state 带 prompt 配置', payload.prompt !== null && typeof payload.prompt === 'object' && payload.prompt.enabled === true, JSON.stringify(payload.prompt))
 }
 
+// 5. 阈值：默认只留出现 >=2 次的标签；minCount:1 时一次性标签也进来
+{
+  const { ctx, state } = makeCtx()
+  apply(ctx, { root: SAMPLE })
+  await state.definition.execute({ mode: 'list', limit: 1 }, {})
+  const line = state.sections[0].text()
+  check('默认阈值：出现一次的标签不进主题词', !line.includes('训练') && !line.includes('检索'), line)
+  check('默认阈值：AI 还在（×5）', line.includes('AI'), line)
+}
+
+{
+  const { ctx, state } = makeCtx()
+  apply(ctx, { root: SAMPLE, topics: { minCount: 1 } })
+  await state.definition.execute({ mode: 'list', limit: 1 }, {})
+  const line = state.sections[0].text()
+  check('minCount:1 时一次性标签也参与排名', line.includes('训练') || line.includes('检索'), line)
+}
+
 if (failed > 0) {
   process.stderr.write(`topics smoke 失败 ${failed} 项\n`)
   process.exit(1)
 }
-console.log('topics smoke 全部通过（8 项）')
+console.log('topics smoke 全部通过（12 项）')
