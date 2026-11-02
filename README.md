@@ -223,7 +223,7 @@ node --run test          # 不需要任何本地知识库，跑 examples/sample-
 node bin/cli.mjs search 上下文 --root=examples/sample-wiki
 ```
 
-想对自己的库冒烟：
+想看看它在你自己的库上跑出来什么（只确认「能跑通、能查到东西」，不校验具体答案）：
 
 ```bash
 WIKI_ROOT="/path/to/your/wiki" node tests/smoke.mjs
