@@ -27,6 +27,8 @@ Built for [DeepSeek Harness](https://github.com/deepseek-ai). Instead of a 5-ste
 
 **一个目录 + 一堆 `.md` 就能用。** 更细的约定见 [docs/库结构.md](docs/库结构.md)：frontmatter 七字段、`index.md` 摘要目录、`log.md` 时间线、`总览-overview.md`，满足得越多检索越准。可跑的样例在 [`examples/sample-wiki/`](examples/sample-wiki/)。
 
+路径指到上一层（比如 `LLM-Wiki/`，里面还有 `原始资料-raw/` 和 `知识层-wiki/`）也没关系：插件会认 `index.md`，自动下钻到知识层，并在返回里注明它实际读的是哪一层。
+
 ---
 
 ## 装
@@ -65,6 +67,7 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 | `list` | 按类型/标签/状态列目录 | `type`、`tags`、`status`、`limit`（40） |
 | `overview` | 总览 + 规模行 + 最近日志 + 健康计数 | — |
 | `lint` | 库健康检查：孤儿页、断链名字、缺字段、别名冲突、久未更新、无出链、草稿、index 与磁盘不一致 | `limit`（8）、`staleDays`（120） |
+| `draft` | 把好答案回写成新页的落盘骨架（目录、frontmatter、index 行、log 条），不写文件 | `title`、`type`、`tags`、`summary`、`sources` |
 
 ```jsonc
 { "mode": "search", "query": "上下文 预算", "limit": 5 }
@@ -118,7 +121,7 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 ```
 lib/corpus.js   扫描 + frontmatter / 小节 / 双链解析
-lib/engine.js   评分、选节、五种模式（纯函数）
+lib/engine.js   评分、选节、六种模式（纯函数）
 lib/config.js   库路径解析与配置读写
 lib/index.js    插件入口：工具、渲染、设置页 API、目录监听
 lib/client.js   设置页（手写 bundle，无构建）

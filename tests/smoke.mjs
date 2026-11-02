@@ -59,6 +59,7 @@ const CASES = isSample
       ['4. 目录：概念页', { mode: 'list', type: '概念', limit: 5 }, /上下文工程/],
       ['5. 总览', { mode: 'overview' }, /库总览/],
       ['6. 健康检查', { mode: 'lint' }, /库健康检查/],
+      ['7. 回写骨架', { mode: 'draft', title: '样例新页', type: '概念' }, /回写骨架/],
     ]
   : [
       ['1. 检索：上下文 预算', { mode: 'search', query: '上下文 预算', limit: 2 }, /./],
@@ -67,6 +68,7 @@ const CASES = isSample
       ['4. 目录：概念页', { mode: 'list', type: '概念', limit: 5 }, /./],
       ['5. 总览', { mode: 'overview' }, /库总览/],
       ['6. 健康检查', { mode: 'lint' }, /库健康检查/],
+      ['7. 回写骨架', { mode: 'draft', title: '样例新页', type: '概念' }, /回写骨架/],
     ]
 
 for (const [label, args, expect] of CASES) {
