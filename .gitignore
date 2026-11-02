@@ -1,0 +1,16 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 本机的库路径配置：每个人不一样，不进仓库
+wiki-notes.config.json
+
+# 作者私有回归基线（含真实笔记标题，只在本地跑）
+tests/local/ab_baseline.json
+
+# 编辑器与系统噪音
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+*~

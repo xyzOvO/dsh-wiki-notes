@@ -1,0 +1,66 @@
+{
+  "name": "dsh-wiki-notes",
+  "version": "0.3.1",
+  "type": "module",
+  "description": "Read-only Markdown knowledge-base retrieval for DeepSeek Harness: one wiki_recall tool (search/page/list/overview) returning the matching section's full text with page-level citations. 中文：本地 Markdown 笔记库检索插件，一次调用返回命中小节正文与出处。",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "wiki",
+    "notes",
+    "markdown",
+    "retrieval",
+    "obsidian"
+  ],
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "wiki-notes": "./bin/cli.mjs"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "docs",
+    "examples",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.13.0"
+  },
+  "scripts": {
+    "test": "node tests/smoke.mjs && node tests/watch.mjs && node tests/client.mjs",
+    "cli": "node bin/cli.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "react": "^18.3.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xyzOvO/dsh-wiki-notes.git"
+  },
+  "homepage": "https://github.com/xyzOvO/dsh-wiki-notes#readme",
+  "bugs": {
+    "url": "https://github.com/xyzOvO/dsh-wiki-notes/issues"
+  },
+  "author": "xyzOvO",
+  "license": "MIT"
+}
