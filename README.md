@@ -46,6 +46,43 @@ token 成本是线性叠加的。
 
 ---
 
+## 上下游：另外两件值得装的工具
+
+这套模式分三段——**进料 → 维护 → 查询**。本插件只做了最后一段，前两段有现成的，都不是必须，但装上之后整条链路会顺很多。
+
+### 进料：[Obsidian Web Clipper](https://github.com/obsidianmd/obsidian-clipper)
+
+Obsidian 官方的浏览器扩展：[Chrome](https://chromewebstore.google.com/detail/obsidian-web-clipper/cnjifjpddelmedmihgijeibhnjfabmlf) / [Firefox](https://addons.mozilla.org/en-US/firefox/addon/web-clipper-obsidian/) / [Safari](https://apps.apple.com/us/app/obsidian-web-clipper/id6720708363) / [Edge](https://microsoftedge.microsoft.com/addons/detail/obsidian-web-clipper/eigdjhmgnaaeaonimdklocfekkaanfme)。
+
+看到好文章，划重点、点一下，正文连同高亮变成 Markdown 直接落进 `原始资料-raw/`。模板 + 变量 + 过滤器能让「来源、日期、标签」自动写进 frontmatter —— 这一步的收益不在省事，在于 **raw 层的元数据质量决定了后面 LLM 能榨出多少**。
+
+> Karpathy 那篇 gist 的「Tips and tricks」第一条推的就是它。
+
+### 维护：[kepano/obsidian-skills](https://github.com/kepano/obsidian-skills)
+
+六个 `SKILL.md`，教 agent 别瞎猜 Obsidian 的语法：
+
+| skill | 管什么 |
+| --- | --- |
+| `obsidian-markdown` | wikilink / embed / callout / properties |
+| `obsidian-bases` | `.base` 的视图、筛选、公式、汇总 |
+| `obsidian-cli` | 通过 Obsidian CLI 操作 vault |
+| `json-canvas` | `.canvas` 的节点、连线、分组 |
+| `defuddle` | 网页抽干净正文（省 token） |
+| `knap` | JSON/CSV + 模板批量渲染 Markdown |
+
+它本身不是软件，是「给模型看的说明书」，遵循 [Agent Skills 规范](https://agentskills.io/specification)，Claude Code / Codex / OpenCode 都能用。价值很实在：没有它，模型写 `.base` 和 `.canvas` 只能靠猜，猜错就是一次往返 —— **正好是这插件想省掉的那种往返**。
+
+### 三者各管一段
+
+| 环节 | 谁来做 | 对应 gist 里的 |
+| --- | --- | --- |
+| 网页 → raw 层 | Web Clipper | 收集 Raw sources |
+| raw → wiki 页 | LLM + obsidian-skills | Ingest 与日常维护 |
+| 查 wiki | **本插件** | Query |
+
+---
+
 ## 它假设你的库长什么样
 
 **一个目录 + 一堆 `.md` 就能用**，别的都是加分项。完整约定见 [docs/库结构.md](docs/库结构.md)。
