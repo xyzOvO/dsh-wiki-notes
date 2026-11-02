@@ -64,6 +64,7 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 | `page` | 按页名/别名取整页 | `name`、`pageChars`（6000） |
 | `list` | 按类型/标签/状态列目录 | `type`、`tags`、`status`、`limit`（40） |
 | `overview` | 总览 + 规模行 + 最近日志 + 健康计数 | — |
+| `lint` | 库健康检查：孤儿页、断链名字、缺字段、别名冲突、久未更新、无出链、草稿、index 与磁盘不一致 | `limit`（8）、`staleDays`（120） |
 
 ```jsonc
 { "mode": "search", "query": "上下文 预算", "limit": 5 }
@@ -117,7 +118,7 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 ```
 lib/corpus.js   扫描 + frontmatter / 小节 / 双链解析
-lib/engine.js   评分、选节、四种模式（纯函数）
+lib/engine.js   评分、选节、五种模式（纯函数）
 lib/config.js   库路径解析与配置读写
 lib/index.js    插件入口：工具、渲染、设置页 API、目录监听
 lib/client.js   设置页（手写 bundle，无构建）
