@@ -75,6 +75,8 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 每条命中带 `kind`（note / raw-summary / source）、`sources`（来源数，**证据强度的唯一可靠代理**）、`status`、`gist`、`section`（命中小节正文，不是 90 字片段）、`citation`（`← [[页名]] §小节 → 路径`）、`brokenLinks`（指向不存在页的双链 = 「库里没依据」的硬信号）。`overview` 额外给三项健康信号：index 有磁盘无、磁盘有 index 无、跨目录重名。
 
+模型怎么知道该查库：插件会从你库里现有的 `标签` 算出主题词，注入一行（约 50 token，例如「本地知识库 73 页，主题：上下文工程、ai、agent…」）。换库自动变，所以问题沾这些主题时它自己会去查，不用你提醒。
+
 > `limit` 默认 5，一次约 2.5–3k token。嫌多可以传 3 省四成，但默认留 5 —— 少一次往返比省四成更值钱。
 
 ---
