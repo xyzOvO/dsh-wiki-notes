@@ -1,6 +1,6 @@
 {
   "name": "dsh-wiki-notes",
-  "version": "0.8.1",
+  "version": "0.8.3",
   "type": "module",
   "description": "Read-only Markdown knowledge-base retrieval for DeepSeek Harness: one wiki_recall tool (search/page/list/overview/lint/draft) returning the matching section's full text with page-level citations. 中文：本地 Markdown 笔记库检索插件，一次调用返回命中小节正文与出处，另带健康检查与回写骨架。",
   "keywords": [
@@ -37,7 +37,7 @@
     "node": ">=20.13.0"
   },
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/params.mjs && node tests/fields.mjs && node tests/config.mjs && node tests/topics.mjs && node tests/watch.mjs && node tests/client.mjs",
+    "test": "node tests/smoke.mjs && node tests/params.mjs && node tests/fields.mjs && node tests/lint.mjs && node tests/config.mjs && node tests/topics.mjs && node tests/watch.mjs && node tests/client.mjs",
     "cli": "node bin/cli.mjs"
   },
   "peerDependencies": {

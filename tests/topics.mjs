@@ -10,6 +10,9 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { apply } from '../lib/index.js'
+// 测试不许碰用户的真配置：把配置文件指到临时目录（跑测试不该改掉设置页里的库路径/提示词）
+process.env.DSH_WIKI_CONFIG = path.join(mkdtempSync(path.join(tmpdir(), 'wiki-notes-cfg-')), 'wiki-notes.config.json')
+
 
 const SAMPLE = fileURLToPath(new URL('../examples/sample-wiki/', import.meta.url))
 let failed = 0

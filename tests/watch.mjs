@@ -4,9 +4,11 @@
  * 不动真库：自己建一个 3 页的小仓库，跑完删掉。
  */
 
-import { mkdirSync, rmSync, writeFileSync, unlinkSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+
+process.env.DSH_WIKI_CONFIG = path.join(mkdtempSync(path.join(os.tmpdir(), 'wiki-notes-cfg-')), 'wiki-notes.config.json')
 
 const dir = path.join(os.tmpdir(), `wiki-watch-${Date.now()}`)
 mkdirSync(path.join(dir, '概念-concepts'), { recursive: true })

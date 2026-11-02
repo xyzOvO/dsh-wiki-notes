@@ -7,8 +7,14 @@
  *   WIKI_ROOT="/path/to/your/wiki" node tests/smoke.mjs
  */
 
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { apply } from '../lib/index.js'
+
+// 测试不许碰用户的真配置
+process.env.DSH_WIKI_CONFIG = join(mkdtempSync(join(tmpdir(), 'wiki-notes-cfg-')), 'wiki-notes.config.json')
 
 const SAMPLE = fileURLToPath(new URL('../examples/sample-wiki/', import.meta.url))
 const ROOT = process.env.WIKI_ROOT ?? SAMPLE

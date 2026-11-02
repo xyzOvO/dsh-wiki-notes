@@ -10,6 +10,8 @@
  *   node bin/cli.mjs bench          # 批量跑一组查询，看耗时与命中
  */
 
+import { fileURLToPath } from 'node:url'
+
 import { loadCorpus } from '../lib/corpus.js'
 import { run } from '../lib/engine.js'
 import { resolveWikiRoot } from '../lib/config.js'
@@ -29,7 +31,8 @@ for (const item of rest) {
   }
 }
 
-const root = resolveWikiRoot(new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'), flags.root)
+// fileURLToPath 会处理百分号编码（路径里有空格或中文时 pathname 是 %E4%B8%AD 这种）
+const root = resolveWikiRoot(fileURLToPath(new URL('..', import.meta.url)), flags.root)
 
 function fmtNumber(value) {
   return value === null || value === undefined ? '-' : String(value)

@@ -29,8 +29,8 @@ const lean = run(corpus, { mode: 'search', query: '上下文 记忆', limit: 1, 
 check('sectionChars 下限 120', (lean.hits[0]?.section.text ?? '').length <= 120,
   `${lean.hits[0]?.section.text?.length ?? 0} 字符`)
 
-const list = run(corpus, { mode: 'list', limit: 999 })
-check('list limit 上限 40', list.rows.length <= 40, `得到 ${list.rows.length}`)
+// list 的 limit 上限挪到 tests/lint.mjs：那里用 250 页的合成语料测，
+// 在样例库上证「≤40」永远是空过（样例库本来不到 40 页）。
 
 const overview = run(corpus, { mode: 'overview', logLimit: 999 })
 check('overview logLimit 上限 20', overview.recentLog.length <= 20, `得到 ${overview.recentLog.length}`)
@@ -39,4 +39,4 @@ if (failed > 0) {
   process.stderr.write(`params smoke 失败 ${failed} 项\n`)
   process.exit(1)
 }
-console.log('params smoke 全部通过（6 项边界）')
+console.log('params smoke 全部通过（5 项边界）')
