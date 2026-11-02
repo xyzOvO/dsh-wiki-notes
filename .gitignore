@@ -14,3 +14,6 @@ Thumbs.db
 *.log
 *.swp
 *~
+
+# 打包产物
+*.tgz
