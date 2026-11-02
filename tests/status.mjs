@@ -7,9 +7,13 @@
  */
 
 import assert from 'node:assert/strict'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { decideStatus, run } from '../lib/engine.js'
 import { classifyFsError, loadCorpus } from '../lib/corpus.js'
+import { apply } from '../lib/index.js'
 
 const SAMPLE = fileURLToPath(new URL('../examples/sample-wiki/', import.meta.url))
 
@@ -25,13 +29,25 @@ function ok(name, fn) {
   console.log(`✓ ${name}`)
 }
 
+/** 需要走 execute（会补 scanned/root）的用例用这个。 */
+async function okAsync(name, fn) {
+  try {
+    await fn()
+  } catch (error) {
+    console.error(`✗ ${name}`)
+    throw error
+  }
+  passed += 1
+  console.log(`✓ ${name}`)
+}
+
 /** 最小 corpus：stats 只写关心的字段，其余补零，避免测试依赖真实库。 */
-function fakeCorpus({ pages = [], stats = {} } = {}) {
+function fakeCorpus({ pages = [], stats = {}, indexLines = [] } = {}) {
   return {
     pages,
     byName: new Map(pages.map((page) => [page.name, page])),
     byAlias: new Map(),
-    indexLines: [],
+    indexLines,
     log: [],
     brokenLinks: [],
     stats: {
@@ -161,15 +177,52 @@ ok('overview 在没有页面时也不会变成 no_match（总览没有「没命�
   assert.equal(verdict.status, 'ok')
 })
 
-/* ------------------------- 超大页：按相关性降级 ------------------------- */
+/* ------------------------- 超大页：按相关性降级（方案 C） ------------------------- */
 
 const BIG = { name: '大文件', file: '资料-sources/大文件.md', oversized: true, fields: {}, sections: [], body: '', links: [] }
 
-ok('search 在有超大页的库上 → partial（那些页可能本该命中）', () => {
+ok('超大页与查询无关 → search 仍是 ok（不因库里有大页就降级）', () => {
   const corpus = fakeCorpus({ pages: [PAGE, BIG], stats: { oversized: 1 } })
   const value = run(corpus, { mode: 'search', query: '上下文' })
+  assert.equal(value.status, 'ok')
+  assert.equal(Object.hasOwn(value, 'warnings'), false)
+})
+
+ok('超大页无关时 no_match 仍然可达（否则这套库永远下不了「没有」的结论）', () => {
+  const corpus = fakeCorpus({ pages: [PAGE, BIG], stats: { oversized: 1 } })
+  const value = run(corpus, { mode: 'search', query: '量子计算' })
+  assert.equal(value.status, 'no_match')
+  assert.equal(value.oversizedRelevant, 0)
+})
+
+ok('超大页标题命中查询词 → partial + 标题口径的提醒', () => {
+  const corpus = fakeCorpus({ pages: [PAGE, BIG], stats: { oversized: 1 } })
+  const value = run(corpus, { mode: 'search', query: '大文件' })
   assert.equal(value.status, 'partial')
-  assert.match(value.warnings.join('\n'), /512KB/)
+  assert.equal(value.oversizedRelevant, 1)
+  assert.match(value.warnings.join('\n'), /标题命中查询词/)
+})
+
+ok('超大页只在 index 摘要里命中 → partial + 摘要口径的提醒', () => {
+  const corpus = fakeCorpus({
+    pages: [PAGE, BIG],
+    stats: { oversized: 1 },
+    indexLines: [{ name: '大文件', summary: '关于量子计算的资料汇编' }],
+  })
+  const value = run(corpus, { mode: 'search', query: '量子计算' })
+  assert.equal(value.status, 'partial')
+  assert.equal(value.oversizedRelevant, 1)
+  assert.equal(value.oversizedRelevantVia, '摘要')
+  assert.match(value.warnings.join('\n'), /index 摘要命中查询词/)
+})
+
+ok('降级与超大页相关同时成立 → 状态 degraded，但两条事实都输出', () => {
+  const corpus = fakeCorpus({ pages: [PAGE, BIG], stats: { oversized: 1 } })
+  const value = run(corpus, { mode: 'search', query: '上下文 大文件' })
+  assert.equal(value.status, 'degraded')
+  const text = value.warnings.join('\n')
+  assert.match(text, /超大页/)
+  assert.match(text, /降级为 OR/)
 })
 
 ok('page 取普通页时，别处的大页不该把状态拖成 partial', () => {
@@ -236,6 +289,51 @@ ok('样例库本身是 ok（没有覆盖缺口）', () => {
   const value = run(corpus, { mode: 'overview' })
   assert.equal(value.status, 'ok')
   assert.equal(Object.hasOwn(value, 'warnings'), false)
+})
+
+/* ---------------------------- 渲染文案（第二步） ---------------------------- */
+
+// 测试不许碰用户的真配置
+process.env.DSH_WIKI_CONFIG = join(mkdtempSync(join(tmpdir(), 'wiki-notes-status-')), 'wiki-notes.config.json')
+const tools = []
+apply({
+  tools: { register: (definition) => { tools.push(definition); return () => {} } },
+  logger: { info() {}, warn() {} },
+  on: () => {},
+}, { root: SAMPLE })
+
+const tool = tools[0]
+const render = (args, value) => (tool.output.render(args, value)[0] ?? {}).text ?? ''
+
+await okAsync('检索头行把分母摊开写（扫描 · 参与 · 命中 · 返回）', async () => {
+  const value = await tool.execute({ mode: 'search', query: '上下文' }, {})
+  const text = render({ mode: 'search' }, value)
+  assert.match(text, /扫描 \d+ · 参与 \d+ · 命中 \d+（全词 \d+）· 返回 \d+/)
+})
+
+await okAsync('空查询的文案是「参数不对」，不再出现「库里没有」', async () => {
+  const value = await tool.execute({ mode: 'search', query: '' }, {})
+  const text = render({ mode: 'search' }, value)
+  assert.match(text, /参数不对/)
+  assert.doesNotMatch(text, /库里没有/)
+})
+
+await okAsync('没命中的文案限定为「当前可检索范围」，并明说不能反推全库', async () => {
+  const value = await tool.execute({ mode: 'search', query: '这段话在样例库里不可能出现' }, {})
+  const text = render({ mode: 'search' }, value)
+  assert.match(text, /当前可检索范围内没有命中/)
+  assert.match(text, /不能反推全库没有/)
+  assert.doesNotMatch(text, /库里没有命中/)
+})
+
+ok('非 ok 时 warnings 渲染成「本次结果有缺口」块', () => {
+  const text = render({ mode: 'search' }, {
+    mode: 'search', status: 'partial', warnings: ['1 个超大页正文没有参与检索，但标题命中查询词 —— 可能还有相关内容没看到'],
+    query: 'x', tokens: ['x'], scanned: 10, considered: 6, matched: 0, allTerms: 0, returned: 0, total: 0, hits: [],
+    oversizedRelevant: 1,
+  })
+  assert.match(text, /本次结果有缺口/)
+  assert.match(text, /标题命中查询词/)
 })
 
 console.log(`\n[status] 全部通过（${passed} 项）`)
