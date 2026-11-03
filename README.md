@@ -68,7 +68,7 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 | `overview` | 总览 + 规模行 + 最近日志 + 健康计数 | `pageChars`（4000）、`logLimit`（5，≤20） |
 | `lint` | 库健康检查：孤儿页、断链名字、缺字段、别名冲突、久未更新、无出链、草稿、index 与磁盘不一致；**并和上次体检对比，报出新增与已修** | `limit`（8，≤40）、`staleDays`（120） |
 | `draft` | 把好答案回写成新页的落盘骨架（目录、frontmatter、index 行、log 条），不写文件 | `title`、`type`、`tags`、`summary`、`sources` |
-| `help` | 用法与状态说明：六个 mode 各返回什么、`status` 各取值怎么读、参数默认值 | 无 |
+| `help` | 用法与状态说明：七个 mode 各返回什么、`status` 各取值怎么读、参数默认值 | 无 |
 
 ```jsonc
 { "mode": "search", "query": "上下文 预算", "limit": 5 }

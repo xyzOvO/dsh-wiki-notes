@@ -47,10 +47,11 @@ apply(ctx, { root: wiki })
 if (handler === null) throw new Error('没有捕获到 API handler')
 
 /** 造一个最小 req/res，走一遍真正的 handler。 */
-function call(method, route, rawBody) {
+function call(method, route, rawBody, headers = {}) {
   const req = new EventEmitter()
   req.method = method
   req.url = `/api/wiki-notes${route}`
+  req.headers = headers
   const res = {
     statusCode: 0,
     headers: {},
@@ -119,6 +120,22 @@ check('/topics minCount 生效', topics.minCount === 3, JSON.stringify(topics))
 const topicBroken = await call('POST', '/topics', 'nope')
 check('/topics 坏 JSON 回 400', topicBroken.status === 400, String(topicBroken.status))
 check('/topics 坏 JSON 不动配置', readCfg().topics.minCount === 3, JSON.stringify(readCfg().topics))
+
+// 7. 跨源写配置：外站 Origin 一律 403，且配置一动不动
+const snapshot = JSON.stringify(readCfg())
+const crossOrigin = await call('POST', '/save', JSON.stringify({ root: wiki }), { origin: 'https://evil.example.com' })
+check('跨源 POST 回 403', crossOrigin.status === 403, String(crossOrigin.status))
+check('跨源 POST 不动配置', JSON.stringify(readCfg()) === snapshot)
+
+// 本机页面照常放行（设置页就是从这个源发出来的）
+const localOrigin = await call('POST', '/save', JSON.stringify({ root: wiki }), { origin: 'http://127.0.0.1:57808' })
+check('本机 Origin 放行', localOrigin.status === 200, String(localOrigin.status))
+
+// 8. 超大请求体：回 413 说清楚，而不是把连接直接掐掉
+const beforeHuge = JSON.stringify(readCfg())
+const huge = await call('POST', '/save', 'x'.repeat(70 * 1024))
+check('超大 body 回 413', huge.status === 413, String(huge.status))
+check('超大 body 不动配置', JSON.stringify(readCfg()) === beforeHuge)
 
 rmSync(wiki, { recursive: true, force: true })
 if (existsSync(configFile)) rmSync(configFile, { force: true })
