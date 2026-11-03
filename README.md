@@ -66,16 +66,17 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 | `page` | 按页名/别名取整页 | `name`、`pageChars`（6000） |
 | `list` | 按类型/标签/状态列目录 | `type`、`tags`、`status`、`limit`（40，≤200） |
 | `overview` | 总览 + 规模行 + 最近日志 + 健康计数 | `pageChars`（4000）、`logLimit`（5，≤20） |
-| `lint` | 库健康检查：孤儿页、断链名字、缺字段、别名冲突、久未更新、无出链、草稿、index 与磁盘不一致 | `limit`（8，≤40）、`staleDays`（120） |
+| `lint` | 库健康检查：孤儿页、断链名字、缺字段、别名冲突、久未更新、无出链、草稿、index 与磁盘不一致；**并和上次体检对比，报出新增与已修** | `limit`（8，≤40）、`staleDays`（120） |
 | `draft` | 把好答案回写成新页的落盘骨架（目录、frontmatter、index 行、log 条），不写文件 | `title`、`type`、`tags`、`summary`、`sources` |
+| `help` | 用法与状态说明：六个 mode 各返回什么、`status` 各取值怎么读、参数默认值 | 无 |
 
 ```jsonc
 { "mode": "search", "query": "上下文 预算", "limit": 5 }
 ```
 
-每条命中带 `kind`（note / raw-summary / source）、`sources`（来源数，**证据强度的唯一可靠代理**）、`status`、`gist`、`section`（命中小节正文，不是 90 字片段）、`citation`（`← [[页名]] §小节 → 路径`）、`brokenLinks`（指向不存在页的双链 = 「库里没依据」的硬信号）。`overview` 额外给三项健康信号：index 有磁盘无、磁盘有 index 无、跨目录重名。
+每条命中带 `kind`（note / raw-summary / source）、`sources`（来源数，**证据强度的唯一可靠代理**）、`status`、`gist`、`section`（命中小节正文，不是 90 字片段）、`citation`（`← [[页名]] §小节 → 路径`）、`brokenLinks`（指向不存在页的双链 = 「库里没依据」的硬信号），以及 `updated` 后面的**距今天数**（超过 180 天标「可能已过时」——三年前的结论和上周的长得一样，模型需要这个信号）。`overview` 额外给三项健康信号：index 有磁盘无、磁盘有 index 无、跨目录重名。
 
-模型怎么知道该查库：插件会从你库里现有的 `标签` 算出主题词，注入一行（约 50 token，例如「本地知识库 73 页，主题：上下文工程、ai、agent…」）。换库自动变，所以问题沾这些主题时它自己会去查，不用你提醒。设置页里可以关掉（不占上下文）、换成自己的整段、或在末尾追加一句，改完下一回合生效。
+模型怎么知道该查库：插件会从你库里现有的 `标签` 算出主题词，注入一行（约 50 token，例如「本地知识库主题：上下文工程、ai、agent…」）。不带页数 —— 页数一变就会打掉提示词的前缀缓存，而它对「该不该查」没有帮助。换库自动变，所以问题沾这些主题时它自己会去查，不用你提醒。设置页里可以关掉（不占上下文）、换成自己的整段、或在末尾追加一句，改完下一回合生效。
 
 主题词怎么挑：跳过 `总览`/`index` 这类结构页，跳过 `数据`/`工具`/`meta` 这类空泛标签，默认只留出现 ≥2 次的标签（设置页可改回 ≥1）。全被滤掉时退回不过滤的前五 —— 小库不至于一条提示都没有。
 
@@ -125,20 +126,22 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 ```
 lib/corpus.js   扫描 + frontmatter / 小节 / 双链解析
-lib/engine.js   评分、选节、六种模式（纯函数）
+lib/engine.js   评分、选节、七种模式（纯函数）
 lib/config.js   库路径解析与配置读写
 lib/index.js    插件入口：工具、渲染、设置页 API、目录监听
 lib/client.js   设置页（手写 bundle，无构建）
 bin/cli.mjs     命令行，不装插件也能跑
+tools/probe.mjs 检索质量探针：hit@1 / hit@3 / Recall@5，追加趋势 CSV
 docs/库结构.md  库结构约定（这份才是一手文档）
 examples/       可跑的最小样例库
-tests/          smoke / watch / client bundle
+tests/          smoke / status / lint / api / help / contract / watch / client bundle
 ```
 
 ```bash
 node --run test                                    # 跑样例库，不需要本地知识库
 node bin/cli.mjs search 上下文 --root=examples/sample-wiki
 WIKI_ROOT="/path/your/wiki" node tests/smoke.mjs   # 拿自己的库跑通就行（不校验答案）
+node --run probe -- --root "/path/your/wiki"       # 攒一行检索质量趋势
 ```
 
 ## License
