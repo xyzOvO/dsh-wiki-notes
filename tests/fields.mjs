@@ -8,7 +8,7 @@
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { loadCorpus, normalizeFields } from '../lib/corpus.js'
+import { loadCorpus, normalizeFields, splitFrontmatter } from '../lib/corpus.js'
 import { search, list } from '../lib/engine.js'
 
 let pass = 0
@@ -68,6 +68,28 @@ const listed = list(corpus, { tags: '时政' })
 ok('list --tags 能筛到', listed.rows.length === 1)
 const listedType = list(corpus, { type: '概念' })
 ok('list --type 概念 能筛到', listedType.rows.length === 1)
+
+// 3) YAML 块序列：Obsidian 属性面板给多值属性（标签/别名）落盘就是这个形态
+const blockSeq = splitFrontmatter(
+  ['---', '标题: 块序列页', '标签:', '  - RAG', '  - 检索', '别名:', '  - 向量库', '更新: 2026-01-01', '---', '', '正文'].join('\n'),
+)
+ok('块序列：标签成数组', Array.isArray(blockSeq.fields['标签']) && blockSeq.fields['标签'].join(',') === 'RAG,检索', JSON.stringify(blockSeq.fields['标签']))
+ok('块序列：别名成数组', Array.isArray(blockSeq.fields['别名']) && blockSeq.fields['别名'][0] === '向量库', JSON.stringify(blockSeq.fields['别名']))
+ok('块序列：后续键没被吞', blockSeq.fields['更新'] === '2026-01-01' && blockSeq.fields['标题'] === '块序列页', JSON.stringify(blockSeq.fields))
+ok('块序列：正文完整', blockSeq.body.trim() === '正文', JSON.stringify(blockSeq.body))
+
+// 4) 命中的词只落在清单类小节（§元信息）时，必须给那一节，不能拿无关小节顶上
+const dir2 = mkdtempSync(join(tmpdir(), 'wn-section-'))
+mkdirSync(join(dir2, 'concepts'))
+writeFileSync(
+  join(dir2, 'concepts', '回退页.md'),
+  ['---', '类型: 概念', '状态: 已提纯', '标签: [测试]', '更新: 2026-01-01', '---', '', '# 回退页', '', '## 定义', '', '完全无关的一段话，讲的是别的东西。', '', '## 元信息', '', '向量检索 向量检索 向量检索', ''].join('\n'),
+)
+const corpus2 = await loadCorpus(dir2)
+const picked = search(corpus2, '向量检索', { limit: 1 })
+ok('命中落在 §元信息 时就返回它', picked.hits[0]?.section?.title === '元信息', JSON.stringify(picked.hits[0]?.section ?? null))
+ok('返回的片段确实含查询词', (picked.hits[0]?.section?.text ?? '').includes('向量检索'), JSON.stringify(picked.hits[0]?.section?.text ?? ''))
+rmSync(dir2, { recursive: true, force: true })
 
 rmSync(dir, { recursive: true, force: true })
 console.log('\nfields smoke ' + (process.exitCode ? '有失败' : `全部通过（${pass} 项）`))
