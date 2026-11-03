@@ -37,8 +37,9 @@
     "node": ">=20.13.0"
   },
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/status.mjs && node tests/params.mjs && node tests/fields.mjs && node tests/lint.mjs && node tests/config.mjs && node tests/cli.mjs && node tests/api.mjs && node tests/topics.mjs && node tests/draft.mjs && node tests/watch.mjs && node tests/client.mjs",
-    "cli": "node bin/cli.mjs"
+    "test": "node tests/smoke.mjs && node tests/status.mjs && node tests/params.mjs && node tests/fields.mjs && node tests/lint.mjs && node tests/lintdiff.mjs && node tests/config.mjs && node tests/cli.mjs && node tests/api.mjs && node tests/help.mjs && node tests/contract.mjs && node tests/topics.mjs && node tests/draft.mjs && node tests/watch.mjs && node tests/client.mjs",
+    "cli": "node bin/cli.mjs",
+    "probe": "node tools/probe.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
