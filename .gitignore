@@ -21,3 +21,4 @@ Thumbs.db
 # 冻结基线的历史快照与元数据（含真实笔记标题，只在本地）
 tests/local/history/
 tests/local/ab_baseline.meta.json
+probe-history.csv

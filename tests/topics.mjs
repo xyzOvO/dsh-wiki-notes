@@ -49,6 +49,11 @@ function makeCtx() {
   check('不带「N 页」（页数在设置页看，不在提示词里）', !/\d+\s*页/.test(text), text)
   check('点出了样例库的标签 AI', text.includes('AI'), text)
   check('长度有上限（≤ 130 字符）', text.length <= 130, `${text.length} 字符`)
+  // 用户可能把 {{...}} 写进自己的提示词里，那不是变量，是字面文本
+  check('关掉了变量插值（interpolate:false）', section?.interpolate === false, String(section?.interpolate))
+  // 同一份输入两次求值必须逐字节相同：这段每回合都在上下文里，
+  // 只要上次和这次不一样就打掉一次前缀缓存，而它的内容其实没变
+  check('同输入两次求值逐字节相同', section.text() === section.text(), '两次结果不同')
 }
 
 // 2. 没配库：必须是空串，不能每回合白占上下文
