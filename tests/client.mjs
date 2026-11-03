@@ -112,4 +112,26 @@ for (const item of cleanups) {
 }
 console.log('✓ 清理后 style 节点:', styleNodes.get('dsh-wiki-notes-styles') ?? '已移除')
 
+// ---- 交互规则的守卫 ----
+// 这些只能验源码里写着，验不了真点一下（没有真 DOM）；但它们恰好都是
+// 「删掉这行就悄悄回退成坏行为」的地方，值得钉住。
+const guards = [
+  ['空输入框不许保存', '输入框是空的。想换库就填新路径'],
+  ['清掉配置要二次确认', '确认清掉？'],
+  ['请求有超时', 'AbortController'],
+  ['扫描用更长的超时', 'SCAN_TIMEOUT_MS'],
+  ['同一时刻只跑一个操作', 'busyRef.current'],
+]
+for (const [label, needle] of guards) {
+  if (!source.includes(needle)) throw new Error(`缺少交互守卫：${label}（找不到 ${needle}）`)
+  console.log('✓ 交互守卫:', label)
+}
+
+const textareaMax = (source.match(/maxLength: 600/g) || []).length
+if (textareaMax < 2) throw new Error(`两段提示词都该有 600 字上限，实际 ${textareaMax} 处`)
+console.log('✓ 提示词输入框上限:', textareaMax, '处')
+
+if (!source.includes('.wn-btn-danger')) throw new Error('缺少二次确认时的危险按钮样式 .wn-btn-danger')
+console.log('✓ 危险按钮样式已注入')
+
 console.log('\nclient smoke 全部通过')
