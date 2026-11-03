@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
   PROMPT_MAX_CHARS,
+  mergePromptConfig,
+  mergeTopicConfig,
   readConfigFile,
   readPromptConfig,
   readTopicConfig,
@@ -19,7 +21,9 @@ import {
 } from '../lib/config.js'
 
 let failed = 0
+let total = 0
 function check(name, ok, detail = '') {
+  total += 1
   if (ok) return
   failed += 1
   process.stderr.write(`  ✗ ${name}${detail ? ` — ${detail}` : ''}\n`)
@@ -77,8 +81,23 @@ check('minCount 超上限被夹到 20', readTopicConfig(dir2).minCount === 20, J
 check('stopwords 缺省为开', readTopicConfig(dir2).stopwords === true)
 rmSync(dir2, { recursive: true, force: true })
 
+// 10. 局部合并：没提到的字段不许被清空（POST /prompt 只带 enabled 的那个 bug）
+const current = { enabled: true, override: '整句替换', extra: '加一句' }
+const onlyEnabled = mergePromptConfig(current, { enabled: false })
+check('合并：只改 enabled 不动 override', onlyEnabled.override === '整句替换', JSON.stringify(onlyEnabled))
+check('合并：只改 enabled 不动 extra', onlyEnabled.extra === '加一句', JSON.stringify(onlyEnabled))
+check('合并：enabled 真的改了', onlyEnabled.enabled === false, JSON.stringify(onlyEnabled))
+const onlyExtra = mergePromptConfig(current, { extra: '换一句' })
+check('合并：只给 extra 时 enabled/override 保持', onlyExtra.enabled === true && onlyExtra.override === '整句替换', JSON.stringify(onlyExtra))
+const notPatch = mergePromptConfig(current, null)
+check('合并：patch 非对象时原样返回', notPatch.extra === '加一句' && notPatch.enabled === true, JSON.stringify(notPatch))
+const wrongType = mergePromptConfig(current, { enabled: 'yes' })
+check('合并：类型不对的字段当没写', wrongType.enabled === true && wrongType.override === '整句替换', JSON.stringify(wrongType))
+const topicMerged = mergeTopicConfig({ minCount: 1, stopwords: false }, { minCount: 3 })
+check('合并主题词：保留 stopwords', topicMerged.stopwords === false && topicMerged.minCount === 3, JSON.stringify(topicMerged))
+
 if (failed > 0) {
   process.stderr.write(`config smoke 失败 ${failed} 项\n`)
   process.exit(1)
 }
-console.log('config smoke 全部通过（12 项）')
+console.log(`config smoke 全部通过（${total} 项）`)
