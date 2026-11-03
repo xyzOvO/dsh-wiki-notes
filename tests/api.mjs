@@ -131,6 +131,10 @@ check('跨源 POST 不动配置', JSON.stringify(readCfg()) === snapshot)
 const localOrigin = await call('POST', '/save', JSON.stringify({ root: wiki }), { origin: 'http://127.0.0.1:57808' })
 check('本机 Origin 放行', localOrigin.status === 200, String(localOrigin.status))
 
+// 沙箱 iframe / file:// 发的是字符串 'null'：放行，否则用户自己的保存按钮会被挡掉
+const opaque = await call('POST', '/save', JSON.stringify({ root: wiki }), { origin: 'null' })
+check('不透明来源 Origin: null 放行', opaque.status === 200, String(opaque.status))
+
 // 8. 超大请求体：回 413 说清楚，而不是把连接直接掐掉
 const beforeHuge = JSON.stringify(readCfg())
 const huge = await call('POST', '/save', 'x'.repeat(70 * 1024))
