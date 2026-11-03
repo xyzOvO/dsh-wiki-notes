@@ -11,7 +11,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { decideStatus, run } from '../lib/engine.js'
+import { decideStatus, freshnessOf, run } from '../lib/engine.js'
 import { classifyFsError, loadCorpus } from '../lib/corpus.js'
 import { apply } from '../lib/index.js'
 
@@ -342,6 +342,61 @@ ok('degraded 的说明只说一遍（warnings 与 note 不能重复）', () => {
   const text = render({ mode: 'search' }, value)
   const times = text.split('降级').length - 1
   assert.equal(times, 1, `「降级」出现了 ${times} 次：\n${text}`)
+})
+
+/* ---------------------- 第一批：时效与同名页 ---------------------- */
+
+ok('freshnessOf：今天 / 昨天 / N 天前 / N 个月前 / 可能已过时', () => {
+  const now = new Date(2026, 10, 4).getTime() // 2026-11-04 本地零点
+  assert.equal(freshnessOf('2026-11-04', now), '2026-11-04（今天更新）')
+  assert.equal(freshnessOf('2026-11-03', now), '2026-11-03（昨天更新）')
+  assert.equal(freshnessOf('2026-10-25', now), '2026-10-25（10 天前）')
+  assert.equal(freshnessOf('2026-08-04', now), '2026-08-04（3 个月前）')
+  assert.match(freshnessOf('2024-01-01', now), /个月前，可能已过时/)
+})
+
+ok('freshnessOf：解析不了或未来日期原样返回，不编造', () => {
+  const now = new Date(2026, 10, 4).getTime()
+  assert.equal(freshnessOf('2027-01-01', now), '2027-01-01')
+  assert.equal(freshnessOf('', now), '')
+  assert.equal(freshnessOf('待补', now), '待补')
+})
+
+ok('渲染出来的命中带时效，不只给一个日期', () => {
+  const old = { ...PAGE, fields: { ...PAGE.fields, 更新: '2024-01-01' } }
+  const value = run(fakeCorpus({ pages: [old] }), { mode: 'search', query: '上下文' })
+  const text = render({ mode: 'search' }, value)
+  assert.match(text, /2024-01-01（\d+ 个月前，可能已过时）/)
+})
+
+ok('page 命中同名页 → partial，并点名另一篇的文件', () => {
+  const twin = { ...PAGE, file: '方法-methods/上下文工程.md' }
+  const corpus = fakeCorpus({
+    pages: [twin, PAGE],
+    stats: {
+      duplicateNames: [
+        { name: PAGE.name, file: twin.file },
+        { name: PAGE.name, file: PAGE.file },
+      ],
+    },
+  })
+  const value = run(corpus, { mode: 'page', name: PAGE.name })
+  assert.equal(value.status, 'partial')
+  assert.match(value.warnings[0], /2 篇同名页「上下文工程」/)
+  assert.ok(value.warnings[0].includes(twin.file), value.warnings[0])
+})
+
+ok('名字唯一的 page 不触发重名提示', () => {
+  const value = run(fakeCorpus({ pages: [PAGE] }), { mode: 'page', name: PAGE.name })
+  assert.equal(value.status, 'ok')
+})
+
+ok('零命中的渲染给出下一步，而不只是「换同义词」', () => {
+  const value = run(fakeCorpus({ pages: [PAGE] }), { mode: 'search', query: '量子计算' })
+  // scanned 由 execute 补，这里手动给：否则会走「扫描到 0 页 = 路径指错」那条分支
+  const text = render({ mode: 'search' }, { ...value, scanned: 1 })
+  assert.match(text, /页面标题或术语原文重试/)
+  assert.match(text, /才可以说「笔记里没有这个主题」/)
 })
 
 console.log(`\n[status] 全部通过（${passed} 项）`)
