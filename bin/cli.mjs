@@ -22,12 +22,26 @@ const rest = argv.slice(1)
 
 const flags = {}
 const positional = []
-for (const item of rest) {
-  if (item.startsWith('--')) {
-    const [key, value] = item.slice(2).split('=')
-    flags[key] = value ?? true
-  } else {
+// 两种写法都收：`--limit=3` 和 `--limit 3`。
+// 只认等号那版曾让 `--limit 3` 变成 flags.limit === true，Number(true) === 1，
+// 于是「要 3 条」安静地只返回 1 条；`--root 路径` 同样被整个忽略，实际读的还是默认库。
+for (let i = 0; i < rest.length; i += 1) {
+  const item = rest[i]
+  if (!item.startsWith('--')) {
     positional.push(item)
+    continue
+  }
+  const eq = item.indexOf('=')
+  if (eq !== -1) {
+    flags[item.slice(2, eq)] = item.slice(eq + 1)
+    continue
+  }
+  const next = rest[i + 1]
+  if (next !== undefined && !next.startsWith('--')) {
+    flags[item.slice(2)] = next
+    i += 1
+  } else {
+    flags[item.slice(2)] = true
   }
 }
 
