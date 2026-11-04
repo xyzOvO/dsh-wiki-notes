@@ -134,4 +134,202 @@ console.log('✓ 提示词输入框上限:', textareaMax, '处')
 if (!source.includes('.wn-btn-danger')) throw new Error('缺少二次确认时的危险按钮样式 .wn-btn-danger')
 console.log('✓ 危险按钮样式已注入')
 
+// ---- 右侧栏：注册形状与故障隔离 ----
+// 真渲染验不了，但「登记了什么」和「服务不在时会不会炸」恰好是故障隔离的全部内容。
+
+function flatten(node, out = []) {
+  if (Array.isArray(node)) {
+    for (const item of node) flatten(item, out)
+    return out
+  }
+  if (node === null || typeof node !== 'object') return out
+  // 函数组件在 React 里是「渲染时才展开」的：stub 没有渲染器，就自己展开一层，
+  // 否则只能看到 <WikiSearchPanel/> 这个元素本身，看不到它里面的输入框。
+  if (typeof node.type === 'function') {
+    flatten(node.type(node.props ?? {}), out)
+    return out
+  }
+  out.push(node)
+  flatten(node.children ?? [], out)
+  return out
+}
+
+function sidebarCtx(tabs) {
+  const seen = { tabs: [], panes: [], injected: [] }
+  const owner = {
+    get: (name) => (name === 'sidebarRightTabs' ? tabs : undefined),
+    effect: (factory, label) => {
+      const dispose = factory()
+      seen.effectLabel = label
+      return dispose
+    },
+    slots: {
+      inject: (name, factory) => {
+        seen.injected.push(name)
+        return factory()
+      },
+      register: (options, component) => {
+        seen.panes.push({ options, component })
+        return () => {}
+      },
+    },
+  }
+  const ctx = {
+    effect: () => () => {},
+    slots: { inject: () => () => {}, register: () => () => {} },
+    inject: (deps, factory) => {
+      seen.deps = deps
+      return factory(owner)
+    },
+  }
+  return { ctx, seen }
+}
+
+// 1) 服务在：tab 类型与面板都要登记上去
+const registeredTabs = []
+const live = sidebarCtx({ register: (definition) => { registeredTabs.push(definition); return () => {} } })
+moduleExports.apply(live.ctx)
+if (JSON.stringify(live.seen.deps) !== JSON.stringify(['sidebarRightTabs'])) {
+  throw new Error(`期望按需注入 sidebarRightTabs，实际 ${JSON.stringify(live.seen.deps)}`)
+}
+console.log('✓ 侧栏：按需注入 sidebarRightTabs')
+if (registeredTabs.length !== 1) throw new Error(`期望注册 1 个 tab 类型，实际 ${registeredTabs.length}`)
+const tab = registeredTabs[0]
+if (tab.id !== 'dsh-wiki-notes/search') throw new Error(`tab id 不对：${tab.id}`)
+if (tab.kind !== 'wiki-notes-search') throw new Error(`tab kind 不对：${tab.kind}`)
+if (tab.priority !== 'extension') throw new Error(`tab priority 不对：${tab.priority}`)
+if (tab.title() !== '知识库') throw new Error(`tab 标题不对：${tab.title()}`)
+// 侧栏实际显示的是 guide 里的标题（image-gen 也是两处同一个字符串），两处不一致就会
+// 把页签写成一句说明。
+if (!Array.isArray(tab.guide) || tab.guide.length !== 1) throw new Error('tab.guide 应恰好一条')
+if (tab.guide[0].title() !== tab.title()) {
+  throw new Error(`guide 标题 ${tab.guide[0].title()} 与 tab.title() ${tab.title()} 不一致`)
+}
+console.log('✓ 侧栏：tab 类型注册正确（id / kind / priority / title / guide 标题一致）')
+if (!live.seen.injected.includes('sidebar.right.pane.tab')) throw new Error('没有登记 sidebar.right.pane.tab')
+if (live.seen.panes.length !== 1) throw new Error(`期望 1 个侧栏面板，实际 ${live.seen.panes.length}`)
+if (live.seen.panes[0].options.key !== 'dsh-wiki-notes/search') {
+  throw new Error(`面板 key 与 tab id 对不上：${live.seen.panes[0].options.key}`)
+}
+console.log('✓ 侧栏：面板挂在与 tab 同名的 key 上')
+
+// 面板里必须有输入框和按钮，否则这个入口就是个空壳
+const paneTree = flatten(live.seen.panes[0].component({}))
+const inputs = paneTree.filter((node) => node.type === 'input')
+const buttons = paneTree.filter((node) => node.type === 'button')
+if (inputs.length !== 1) throw new Error(`侧栏面板应有 1 个输入框，实际 ${inputs.length}`)
+if (!String(inputs[0].props.placeholder).includes('输入关键词')) throw new Error('输入框没有引导文案')
+if (buttons.length !== 1) throw new Error(`侧栏面板应有 1 个按钮，实际 ${buttons.length}`)
+if (buttons[0].props.disabled !== true) throw new Error('空查询时按钮应当禁用')
+console.log('✓ 侧栏：面板有输入框与「查一下」，空查询时按钮禁用')
+
+// 2) 服务不在：一个面板都不许注册，也不许抛 —— 设置页要照常可用
+const empty = sidebarCtx(undefined)
+moduleExports.apply(empty.ctx)
+if (empty.seen.panes.length !== 0) throw new Error('服务不在时不该注册侧栏面板')
+console.log('✓ 侧栏故障隔离：服务不在时静默跳过')
+
+// 3) 面板走的是模型那条路：/search 接口，不许自己另算一套
+if (!source.includes("apiGet('/search?q='")) throw new Error('面板没有走 /search 接口')
+console.log('✓ 面板走 /api/wiki-notes/search（与 wiki_recall 同一条 run()）')
+
+// 4) 设置页里也挂着同一个面板
+const settingsTree = flatten(tree)
+const settingsInputs = settingsTree.filter((node) => node.type === 'input' && node.props.placeholder === inputs[0].props.placeholder)
+if (settingsInputs.length !== 1) throw new Error('设置页里没有检索面板')
+console.log('✓ 设置页内也有同一个检索面板')
+
+// 5) 命中行：行布局必须挂在 summary 里那层 span 上
+//    summary 自带 display 规则，有些浏览器会顶掉 display:flex —— 真机验证过，
+//    直接把 flex 写在 summary 上时整行会塌成内容宽度、分数贴在标题右边。
+const preview = moduleExports.__preview
+if (!preview || typeof preview.SearchHit !== 'function') throw new Error('缺少 __preview.SearchHit（预览与测试都要它）')
+const hitTree = flatten(
+  preview.SearchHit({
+    hit: {
+      name: '甲',
+      type: '概念',
+      score: 100,
+      allTerms: false,
+      section: '小节',
+      body: '正文',
+      citation: 'a.md',
+      termHits: [
+        { term: '甲', score: 100, count: 3, parts: [{ via: 'name', score: 120 }, { via: 'body', score: 9, count: 3 }] },
+      ],
+    },
+    rank: 1,
+    top: 100,
+  }),
+)
+const rows = hitTree.filter((node) => node.props && node.props.className === 'wn-hit-row')
+if (rows.length !== 1) throw new Error(`命中行应有 1 层 .wn-hit-row，实际 ${rows.length}`)
+const summary = hitTree.find((node) => node.type === 'summary')
+if (!summary) throw new Error('命中行没有 summary（不可展开）')
+const meterFill = hitTree.find((node) => node.props && node.props.className === 'wn-hit-meter-fill')
+if (!meterFill || !meterFill.props.style || meterFill.props.style.width !== '100%') {
+  throw new Error('分数条没有按相对第一名的比例设置宽度')
+}
+const partial = hitTree.filter((node) => node.props && node.props.className === 'wn-hit-partial')
+if (partial.length !== 1) throw new Error('未命中全部词时缺「部分词」标记')
+console.log('✓ 命中行：行布局在 span 上，分数条按相对分缩放')
+
+// 6) 正文命中高亮：长词优先，且只标位置不改字
+const marks = preview.highlightNodes('上下文工程就是上下文预算', ['上下文', '上下文工程'])
+const marked = marks.filter((node) => typeof node === 'object' && node.type === 'mark')
+const text = marks.map((node) => (typeof node === 'string' ? node : node.children[0])).join('')
+if (marked.length !== 2) throw new Error(`应当标 2 处（长词优先，上下文工程不被切开），实际 ${marked.length}`)
+if (marked[0].children[0] !== '上下文工程') throw new Error('长词没有优先匹配：' + marked[0].children[0])
+if (text !== '上下文工程就是上下文预算') throw new Error('高亮改动了原文：' + text)
+// 正则元字符不许把整段吃掉
+const risky = preview.highlightNodes('a.b(c)', ['a.b(c)'])
+if (risky.filter((node) => typeof node === 'object').length !== 1) throw new Error('正则元字符没被转义')
+console.log('✓ 正文高亮：长词优先、原文不变、元字符安全')
+
+// 7) citation 可复制
+const citeTree = flatten(preview.CiteRow({ text: '← [[甲]] §小节 → 甲.md' }))
+const copyBtn = citeTree.find((node) => node.type === 'button' && node.props.className === 'wn-cite-copy')
+if (!copyBtn) throw new Error('citation 那一行没有复制按钮')
+const emptyCite = flatten(preview.CiteRow({ text: '' }))
+if (emptyCite.some((node) => node.type === 'button')) throw new Error('没有出处时不该出现复制按钮')
+console.log('✓ citation 可复制')
+
+// 8) 格式化助手：路径与时间不能编数
+if (preview.bytesLabel(0) !== '0 KB' || preview.bytesLabel(2048) !== '2 KB' || !preview.bytesLabel(3 * 1024 * 1024).endsWith('MB')) {
+  throw new Error('bytesLabel 输出不对：' + [preview.bytesLabel(0), preview.bytesLabel(2048), preview.bytesLabel(3145728)].join(' / '))
+}
+if (preview.shortTime('') !== '—' || preview.shortTime('乱码') !== '—') throw new Error('坏时间应当给短横')
+if (!/^\d\d-\d\d \d\d:\d\d$/.test(preview.shortTime('2026-11-04T15:22:00.000Z'))) {
+  throw new Error('时间格式不对：' + preview.shortTime('2026-11-04T15:22:00.000Z'))
+}
+console.log('✓ 覆盖诊断的格式化助手')
+
+// 9) 查询诊断那一行的 CSS 与源码守卫（没有真 DOM，只能钉「写着」）
+for (const needle of ['.wn-terms{', '.wn-term-miss{', '.wn-mark{', '.wn-group-label{', '.wn-cov{', '.wn-busy{']) {
+  if (!source.includes(needle)) throw new Error('缺少样式：' + needle)
+}
+for (const [label, needle] of [
+  ['输入防抖', 'scheduleSearch'],
+  ['Esc 清空', "event.key === 'Escape'"],
+  ['上下键选结果', "event.key === 'ArrowDown'"],
+  ['快捷键聚焦', 'window.addEventListener'],
+  ['按类型分组', 'wn-group-label'],
+]) {
+  if (!source.includes(needle)) throw new Error(`缺少交互：${label}（找不到 ${needle}）`)
+  console.log('✓ 交互:', label)
+}
+console.log('✓ 查询诊断与覆盖诊断的样式/交互守卫')
+
+// 10) 复制查询词：按钮要能画出来，样式与焦点可见都要在
+if (typeof preview.CopyButton !== 'function') throw new Error('CopyButton 没导出给预览')
+const copyTree = flatten(preview.CopyButton({ className: 'wn-copy-query', text: '上下文 预算', label: '复制词' }))
+const copyNode = copyTree[0]
+if (!copyNode || copyNode.type !== 'button') throw new Error('复制查询词应当渲染成 button')
+if (copyNode.props.className !== 'wn-copy-query') throw new Error('复制按钮没带上 .wn-copy-query')
+if (String(copyNode.children) !== '复制词') throw new Error('复制按钮文案不对：' + copyNode.children)
+for (const needle of ['wn-copy-query', '.wn-copy-query{', 'wn-cite-copy:focus-visible']) {
+  if (!source.includes(needle)) throw new Error('缺少复制相关实现：' + needle)
+}
+console.log('✓ 复制查询词：按钮可渲染，样式与焦点可见')
+
 console.log('\nclient smoke 全部通过')

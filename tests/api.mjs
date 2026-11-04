@@ -141,6 +141,56 @@ const huge = await call('POST', '/save', 'x'.repeat(70 * 1024))
 check('超大 body 回 413', huge.status === 413, String(huge.status))
 check('超大 body 不动配置', JSON.stringify(readCfg()) === beforeHuge)
 
+// 9. /search：面板用的只读查询。必须和模型走同一个 run()，explain 只在服务端打开
+const found = await call('GET', `/search?q=${encodeURIComponent('测试')}`)
+check('/search 回 200', found.status === 200, String(found.status))
+check('/search 命中这一页', found.json?.hits?.length === 1, JSON.stringify(found.json?.hits?.length))
+check('/search 带命中理由', Array.isArray(found.json?.hits?.[0]?.termHits), JSON.stringify(found.json?.hits?.[0]?.termHits))
+check('/search 理由是页名通道', found.json?.hits?.[0]?.termHits?.[0]?.parts?.[0]?.via === 'name',
+  JSON.stringify(found.json?.hits?.[0]?.termHits?.[0]))
+check('/search 带扫描分母', typeof found.json?.scanned === 'number' && found.json.scanned >= 1, String(found.json?.scanned))
+check('/search 带耗时', typeof found.json?.elapsedMs === 'number', String(found.json?.elapsedMs))
+
+const noQuery = await call('GET', '/search')
+check('/search 缺 q 回 400', noQuery.status === 400, String(noQuery.status))
+
+const emptyQuery = await call('GET', '/search?q=%20%20')
+check('/search 空白 q 回 400', emptyQuery.status === 400, String(emptyQuery.status))
+
+const badLimit = await call('GET', `/search?q=${encodeURIComponent('测试')}&limit=abc`)
+check('/search 坏 limit 退回默认而不是报错', badLimit.status === 200 && badLimit.json?.hits?.length === 1, String(badLimit.status))
+
+const hugeLimit = await call('GET', `/search?q=${encodeURIComponent('测试')}&limit=999`)
+check('/search limit 超上限不报错', hugeLimit.status === 200 && hugeLimit.json?.hits?.length === 1, String(hugeLimit.status))
+
+const noHit = await call('GET', `/search?q=${encodeURIComponent('这一页里没有的词')}`)
+check('/search 无命中时 total=0 且 hits 为空',
+  noHit.json?.total === 0 && noHit.json?.hits?.length === 0, JSON.stringify(noHit.json?.total))
+
+// 覆盖诊断：/state 得说清「发现多少、读到多少、漏在哪」，面板才有东西可显示
+const state = await call('GET', '/state')
+const cov = state.json?.stats ?? {}
+check('/state 带 discovered', Number.isInteger(cov.discovered) && cov.discovered > 0, JSON.stringify(cov.discovered))
+check('/state 带 sections（可定位到多细）', Number.isInteger(cov.sections) && cov.sections > 0, JSON.stringify(cov.sections))
+check('/state 带 bytes', Number.isInteger(cov.bytes) && cov.bytes > 0, JSON.stringify(cov.bytes))
+check('/state 带 oversized / unreadable / skipped',
+  Number.isInteger(cov.oversized) && Number.isInteger(cov.unreadable) && Number.isInteger(cov.skipped),
+  JSON.stringify({ oversized: cov.oversized, unreadable: cov.unreadable, skipped: cov.skipped }))
+check('/state 带 newestMtime / scannedAt（ISO 字符串）',
+  typeof cov.newestMtime === 'string' && cov.newestMtime !== '' && typeof cov.scannedAt === 'string' && cov.scannedAt !== '',
+  JSON.stringify({ newestMtime: cov.newestMtime, scannedAt: cov.scannedAt }))
+check('/state 的 discovered = pages + unreadable + skipped',
+  cov.discovered === cov.pages + cov.unreadable + cov.skipped, JSON.stringify(cov))
+
+// 查询诊断：面板要看每个词在多少页上有分
+const diag = await call('GET', `/search?q=${encodeURIComponent('测试 不存在的词')}`)
+check('/search 带 termPages（explain 开着）',
+  Array.isArray(diag.json?.termPages) && diag.json.termPages.length === 2, JSON.stringify(diag.json?.termPages))
+check('/search 的 missedTerms 指出没用上的词',
+  JSON.stringify(diag.json?.missedTerms) === JSON.stringify(['不存在的词']), JSON.stringify(diag.json?.missedTerms))
+check('/search 的 matchMode 与 degraded 一致',
+  diag.json?.matchMode === (diag.json?.degraded === true ? 'or' : 'and'), String(diag.json?.matchMode))
+
 rmSync(wiki, { recursive: true, force: true })
 if (existsSync(configFile)) rmSync(configFile, { force: true })
 

@@ -97,6 +97,32 @@ ok('private 不是 true（否则 npm publish 会被拒）', () => {
   if (pkg.private === true) throw new Error('private=true')
 })
 
+// 侧栏是可选能力：它一坏，设置页必须还能进。所以侧栏模块不能出现在
+// dsh.client.inject 里 —— 那会把「侧栏模块在不在」变成整个客户端包的加载前提。
+ok('没有把侧栏模块写进 dsh.client.inject（否则侧栏缺失会连累设置页）', () => {
+  const injected = pkg.dsh?.client?.inject
+  if (injected === undefined) return
+  if (!Array.isArray(injected)) throw new Error('dsh.client.inject 不是数组')
+  const pinned = injected.filter((name) => String(name).includes('sidebar'))
+  if (pinned.length > 0) throw new Error(`dsh.client.inject 钉了侧栏模块：${pinned.join(', ')}`)
+})
+
+ok('侧栏能力走运行时 ctx.inject 按需取，而不是写死依赖', () => {
+  const text = readFileSync(path.join(ROOT, 'lib/client.js'), 'utf8')
+  if (!text.includes("ctx.inject(['sidebarRightTabs']")) {
+    throw new Error("找不到 ctx.inject(['sidebarRightTabs']")
+  }
+  if (!text.includes("owner.slots.inject('sidebar.right.pane.tab'")) {
+    throw new Error('找不到 sidebar.right.pane.tab 的登记')
+  }
+})
+
+ok('启动时就探一次库（冷扫描不落在用户第一句话上）', () => {
+  const text = readFileSync(path.join(ROOT, 'lib/index.js'), 'utf8')
+  if (!text.includes('启动时探一次库')) throw new Error('找不到启动预热的注释')
+  if (!text.includes('首次扫描')) throw new Error('预热日志没带耗时')
+})
+
 if (failed > 0) {
   console.log(`\n${total - failed}/${total} 通过，${failed} 项失败`)
   process.exit(1)

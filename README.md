@@ -39,7 +39,7 @@ Built for [DeepSeek Harness](https://github.com/deepseek-ai). Instead of a 5-ste
 plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 ```
 
-返回 `application: applied` 就生效，不用重启。改 `lib/*.js` 后关开插件热重载；改 `lib/client.js`（设置页）要重启 DSH。
+返回 `application: applied` 就生效，不用重启。但**改插件自己的代码要重启 DSH**：`lib/*.js`（宿主半）和 `lib/client.js`（设置页）都一样，已载入的模块不会因为关开插件而重新求值。
 
 ---
 
@@ -88,7 +88,40 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 设置 →「知识库」。状态栏圆点表示实时同步是否生效，三个数字是页面 / 资料 / 红链页，下面是路径卡片和 `测试 · 保存并生效 · 重新扫描`。一次没配过时，卡片会变成三步引导。
 
-浏览器半侧走同源 HTTP `/api/wiki-notes/*`（`state` / `check` / `save` / `rescan`），不碰 RPC。
+浏览器半侧走同源 HTTP `/api/wiki-notes/*`（`state` / `search` / `check` / `save` / `rescan`），不碰 RPC。
+
+---
+
+## 检索面板
+
+设置页里有一张「试一试检索」的卡，右侧栏另有一个「知识库」页签 —— 同一份组件，`compact` 控制密度。用途只有一个：**让人自己看见检索依据**，不必等模型说它查到了什么。
+
+输入关键词回车，上面一行是「命中 7 页（显示前 5）· 参与打分 95 页 · 36 ms · 库 95 页」；紧跟一行是**查询诊断**：`实际用的词` 后面逐个列出这次真正参与打分的词，一页都没沾到的词会标成「没沾到」，末尾写清这次是「全词都要（AND）」还是「命中任一（OR）」。中文不分词，写整句时这一行通常只剩一个词 —— 这是最直观的提示：换词，而不是加词。
+
+每条命中占一行，左边是名次、页名、类型，右边是一条按「相对第一名」缩放的分数条和总分。多类型命中会按类型分组（`概念（3）`、`资料（2）`…）。展开后有：
+
+- 页名、类型、总分，以及「只命中部分词」的标记（该条没命中全部查询词）；
+- **命中理由**：每个查询词一条徽章，主词加粗、明细灰字，例如 `上下文 · 页名 120 · 别名 50 · 正文 ×7 21`，未得分的词显示为「未命中」。悬停徽章有各通道的权重说明；
+- 该条命中的小节标题与正文（正文里出现过的查询词带淡黄底纹），末尾附 citation，右侧一个复制按钮 —— 把「哪句话支撑了这条」直接抄进对话里；
+- 查询降级成「命中任一」时，计数行旁边会黄字提示。
+
+**键盘**：输入框防抖 350ms（够 2 个字符才查），`Enter` 立刻查，`Esc` 清空，`↑`/`↓` 在结果里移动高亮并展开对应条目；任意位置按 `/` 或 `Ctrl/⌘ + K` 直接跳到输入框。查询进行中列表上方显示「检索中…」。输入框右边有「复制词」—— 查出来的说法常常要拿去别处再查一遍，省得重敲；citation 那行的复制按钮同理（键盘走过去会看到焦点框）。
+
+**覆盖统计**在设置页的状态卡下面：`发现 102 个文件 → 读到 95 页 / 677 个小节`，后面是总体积、跳过 / 读不了 / 超大未读 / 读取失败的计数（非 0 时标黄）、最新修改时间、本次扫描耗时，以及这次实际扫的目录（自动下钻过时它和配置里的路径不是同一个）。
+
+没查之前不是一片空白：显示库的规模、同步开关，以及库里出现最多的几个标签 —— 点一下直接拿它当查询词，省得先想「该查什么」。查不到时也顺带报覆盖：`参与检索 95 页 / 677 个小节 · 跳过 7` ——「没命中」和「那几页根本没读」是两回事，面板得能分清。`discovered = pages + unreadable + skipped` 在 `tests/api.mjs` 里当恒等式断言，这几个数不是凑出来的。
+
+面板是只读的：不写库、不改配置、不进模型上下文。
+
+**`explain` 是对既有检索的解释，不是第二套检索。** 引擎里分数只有一个实现 —— `termScore(page, token)` 就是 `termBreakdown(page, token).score`，理由和排序分数出自同一份明细，所以面板不可能显示「一套理由、另一套排序」；`tests/explain.mjs` 对同一批查询比对开关前后的 `name|score|allTerms` 逐条相同，还核对了「每个词的明细加起来 === 该条总分」。`explain` 也不在工具 schema 里：模型触发不到它，`wiki_recall` 的输出体积一个 token 都不变。
+
+工具输出里新增两个短字段，是给**模型**看的而不是给面板看的：`matchMode`（`and`/`or`）和 `missedTerms`（一个词都没沾到的那些）—— 模型看到「这个词没用上」才可能换词重查。它们会被渲染成一行：`没沾到：量子纠缠（这些词在库里一页都没命中，换同义词或干脆去掉）`；没有漏词时这行不出现，正常路径不多花一个 token。而「每个词命中多少页」(`termPages`) 只在 `explain` 时出现：那是面板的事，模型用不上。
+
+> 这条踩过一次：字段先加进了 `run()` 的返回值，但模型拿到的是 `renderValue()` 渲染出的文本 —— 不写进渲染，模型就等于没拿到。`tests/status.mjs` 现在有两条断言看着它（有漏词要出现、没漏词不许出现）。
+
+侧栏是可选能力：`ctx.inject(['sidebarRightTabs'], …)` 运行时按需取，服务不在就静默跳过，设置页照常可用；`dsh.client.inject` 刻意不钉侧栏模块（钉了会把「侧栏在不在」变成整个客户端包的加载前提）。`tests/contract.mjs` 守着这两条。
+
+接口：`GET /api/wiki-notes/search?q=上下文 预算&limit=5`，`q` 截到 200 字，`limit` 夹在 1–12，缺 `q` 返回 400。
 
 ---
 
@@ -100,7 +133,7 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 ## 检索质量
 
-与一个零依赖的 python 检索脚本做 A/B：14 条 query、比 top5 集合，**召回 65 / 65，无遗漏**。单条查询 0–2ms，扫 73 页约 50ms。
+基线是 v3：14 条 query / 68 个槽位，比 top5 集合，**Recall@5 = 100%，当回归硬门禁**（口径、判据与历史快照见 [docs/metrics.md](docs/metrics.md)）。单条查询 0–2ms，扫 95 页约 76ms。
 
 评分刻意朴素：标题全等 120 / 标题含 60 / 别名含 50 / 标签含 25 / 正文词频 ×3（封顶 36）/ index 摘要只在其它通道全 0 时补 8。三处经验细节：摘要分只补漏不抢位、同分用码点序（拼音序不可复现）、选节排除清单类与元讨论类小节。
 
@@ -118,6 +151,8 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 - 中文不分词，靠空格切分；连写词靠 `别名` 补。
 - 页名本身是查询词时，正文很少重复该词，选节可能偏。
 - 每次调用全量扫描；70–100 页无所谓，再大一个数量级要上增量索引。
+- **重启后第一次扫描是冷盘读**：95 页实测 5,217ms（此后 29ms）。插件启动就预热一次，所以这段延迟通常落在你还没提问的时候；但第一条查询正好赶上也确实要等。
+- **面板没打开时 `/`、`Ctrl/⌘ + K` 不会有反应**：快捷键绑在面板上，而宿主的 `sidebarRightTabs` 只提供 `register()`，没有「打开 / 激活页签」的接口，插件没法从外面把面板叫出来。
 - 只读。不写库、不改页、不修红链。
 
 ---
@@ -129,12 +164,14 @@ lib/corpus.js   扫描 + frontmatter / 小节 / 双链解析
 lib/engine.js   评分、选节、七种模式（纯函数）
 lib/config.js   库路径解析与配置读写
 lib/index.js    插件入口：工具、渲染、设置页 API、目录监听
-lib/client.js   设置页（手写 bundle，无构建）
+lib/client.js   设置页 + 检索面板 + 右侧栏页签（手写 bundle，无构建）
 bin/cli.mjs     命令行，不装插件也能跑
 tools/probe.mjs 检索质量探针：hit@1 / hit@3 / Recall@5，追加趋势 CSV
+tools/preview.mjs 把面板渲染成静态页（真组件 + 真 CSS），改样式不必重启 DSH
 docs/库结构.md  库结构约定（这份才是一手文档）
+docs/superpowers/specs/  检索面板的设计稿
 examples/       可跑的最小样例库
-tests/          smoke / status / lint / api / help / contract / watch / client bundle
+tests/          smoke / status / lint / explain / api / help / contract / watch / client bundle
 ```
 
 ```bash
@@ -142,7 +179,17 @@ node --run test                                    # 跑样例库，不需要本
 node bin/cli.mjs search 上下文 --root=examples/sample-wiki
 WIKI_ROOT="/path/your/wiki" node tests/smoke.mjs   # 拿自己的库跑通就行（不校验答案）
 node --run probe -- --root "/path/your/wiki"       # 攒一行检索质量趋势
+node tools/preview.mjs                             # 出 preview/panel.html，浏览器直接看面板
+node tools/preview.mjs --diag                      # 同上，并量一遍宽度 / 截断 / 溢出 / 对比度
 ```
+
+发版：改 `version` → `node --run test` 全绿 → `npm pack --dry-run` 看一眼打包内容（`files` 只含 `lib`/`bin`/`docs`/`examples`/`README.md`/`LICENSE`/`cordis.patch.yml`，`preview/` 与 `tools/` 不进包）→ `npm publish`。本机 npm 常是未登录状态（`npm whoami` 报 `need auth`），发布前先在浏览器里确认 token。
+
+改样式的两条经验：
+
+- `.wn-hit-row` 那道 span 不能省。`<summary>` 自带 display 规则，某些浏览器会把 `display:flex` 顶掉，行就塌成内容宽度、分数贴在标题右边 —— 所以行布局放在 summary 里那层 span 上，`tests/client.mjs` 守着它。
+- 小字别用 `--wn-faint`（这组 token 在浅色底上约 3.4:1，低于 WCAG AA 的 4.5），小字一律 `--wn-muted`（约 5:1），层级靠字号和字重拉开，不靠把字调淡。
+- `--diag` 遍历样式表时，别用「有 `cssRules` 就往下钻」的写法：现代 Chrome 的 `CSSStyleRule` 自己也带一个空的 `cssRules`（CSS 嵌套），会把你正要找的那条规则跳过，于是明明 `display=flex` 却报「NOT FOUND」。先判 `rule.cssRules.length`。
 
 ## License
 

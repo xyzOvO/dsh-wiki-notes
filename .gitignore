@@ -22,3 +22,9 @@ Thumbs.db
 tests/local/history/
 tests/local/ab_baseline.meta.json
 probe-history.csv
+
+# lint 的「新增 / 已修」对比基线：机器本地产物，每个库一份
+lint-history.json
+
+# tools/preview.mjs 的产物：静态预览页与截图
+preview/

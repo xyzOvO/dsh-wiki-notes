@@ -336,6 +336,19 @@ ok('非 ok 时 warnings 渲染成「本次结果有缺口」块', () => {
   assert.match(text, /标题命中查询词/)
 })
 
+ok('没沾到的词写进检索头，模型才知道该换哪个词', () => {
+  const value = run(corpus, { mode: 'search', query: '上下文 量子纠缠' })
+  assert.deepEqual(value.missedTerms, ['量子纠缠'])
+  const text = render({ mode: 'search' }, value)
+  assert.match(text, /没沾到：量子纠缠/)
+})
+
+ok('没有漏词时不出「没沾到」那行（正常路径不多一个 token）', () => {
+  const value = run(corpus, { mode: 'search', query: '上下文' })
+  const text = render({ mode: 'search' }, value)
+  assert.doesNotMatch(text, /没沾到/)
+})
+
 ok('degraded 的说明只说一遍（warnings 与 note 不能重复）', () => {
   const value = run(corpus, { mode: 'search', query: '上下文 量子纠缠' })
   assert.equal(value.status, 'degraded')
