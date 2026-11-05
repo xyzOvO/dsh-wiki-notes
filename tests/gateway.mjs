@@ -30,6 +30,9 @@ const TOOLS = process.env.WIKI_TOOLS || ''
 const HAS_PIPELINE = Boolean(process.env.WIKI_ROOT && process.env.WIKI_TOOLS)
 const PYTHON = process.env.WIKI_TEST_PYTHON || 'python'
 const PLUGIN_VERSION = JSON.parse(readFileSync(path.join(PLUGIN_ROOT, 'package.json'), 'utf8')).version
+// 观察日志单独落一份到临时目录：观察闭环的断言要读它，
+// 也不能把测试记录写进正式使用的日志里（那会把修正率带歪）。
+const OBSERVE_LOG = path.join(tmp, 'observe.jsonl')
 
 // 起始配置：有库、没 bridge。先测「没配工具目录」这一路。
 writeFileSync(configFile, JSON.stringify({ root: WIKI }, null, 2), 'utf8')
@@ -97,7 +100,7 @@ check('python 不存在 → E_PYTHON_UNAVAILABLE',
 // 没给就整段跳过——留参数校验与故障隔离那两段就够了，不能因为环境不齐就假装通过。
 if (HAS_PIPELINE) {
   // --- 3. 真跑：插件 vs CLI 逐字段一致 -------------------------------------
-  writeConfig({ bridge: { python: PYTHON, toolsRoot: TOOLS, timeoutMs: 180000, ttlSeconds: 1800 } })
+  writeConfig({ bridge: { python: PYTHON, toolsRoot: TOOLS, timeoutMs: 180000, ttlSeconds: 1800, observeLog: OBSERVE_LOG } })
 
   const QUERY = '重庆 申论 考几道题'
   const viaPlugin = await contextTool.execute({ query: QUERY, limit: 4 })
@@ -179,6 +182,52 @@ if (HAS_PIPELINE) {
       expired?.status === 'context_missing' && expired?.error?.code === 'E_CONTEXT_NOT_FOUND',
       JSON.stringify(expired?.status ?? expired?.error))
     check('快照问题不等于回答错误', (expired?.violations ?? []).length === 0)
+
+    // --- 4b. 观察闭环：verify 记录要能指回它的 context ---------------------
+    // 这是本条断链的回归门禁：插件以前既不显示 observe_id，也不转发它，
+    // 于是日志里每条 verify 记录的 parent_observe_id 都是 null，闭环断开。
+    check('context 返回 observe_id',
+      typeof viaPlugin?.observe_id === 'string' && viaPlugin.observe_id.startsWith('obs_'),
+      JSON.stringify(viaPlugin?.observe_id))
+
+    function readObserveLog() {
+      let raw = ''
+      try {
+        raw = readFileSync(OBSERVE_LOG, 'utf8')
+      } catch {
+        return []
+      }
+      return raw.split(/\r?\n/).filter(Boolean).map((line) => {
+        try {
+          return JSON.parse(line)
+        } catch {
+          return null
+        }
+      }).filter(Boolean)
+    }
+
+    const records = readObserveLog()
+    const ctxRecord = records.find((r) => r.event === 'context' && r.context_id === cid)
+    check('观察日志里有这条 context 的记录', Boolean(ctxRecord), `共 ${records.length} 条记录`)
+    check('context 记录的 observe_id 与返回值一致',
+      ctxRecord?.observe_id === viaPlugin?.observe_id,
+      `日志 ${ctxRecord?.observe_id} / 返回 ${viaPlugin?.observe_id}`)
+
+    const verifyRecord = records.find((r) => r.event === 'verify' && r.context_id === cid)
+    check('观察日志里有这条 verify 的记录', Boolean(verifyRecord), `共 ${records.length} 条记录`)
+    check('verify 记录的 parent_observe_id 指回 context（闭环接通）',
+      verifyRecord?.parent_observe_id === viaPlugin?.observe_id,
+      `parent_observe_id=${JSON.stringify(verifyRecord?.parent_observe_id)}，期望 ${viaPlugin?.observe_id}`)
+
+    // 显式传 observe_id 时以传入的为准（不依赖插件记住的那一对）。
+    const explicitObs = 'obs_explicit00001'
+    await verifyTool.execute({ context_id: cid, answer: '再核验一次。', observe_id: explicitObs })
+    const explicitRecord = readObserveLog()
+      .filter((r) => r.event === 'verify' && r.context_id === cid)
+      .at(-1)
+    check('显式传 observe_id 时以传入的为准',
+      explicitRecord?.parent_observe_id === explicitObs,
+      `parent_observe_id=${JSON.stringify(explicitRecord?.parent_observe_id)}`)
   }
 
 } else {

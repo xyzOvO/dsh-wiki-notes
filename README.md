@@ -70,13 +70,15 @@
 
 ### `wiki_verify` —— 核验回答
 
-写完答案后自查（尤其含数字、范围、年份、题量分值这类主张时）用它。参数：`context_id` + `answer`。
+写完答案后自查（尤其含数字、范围、年份、题量分值这类主张时）用它。参数：`context_id` + `answer`（可选 `observe_id`，一般不用传，插件会自动带上）。
 
 它不重新检索 —— 拿当初那份快照来比，所以快，也不受库里后来改动的影响。
 
 返回 `status` 与 `violations`：violations 非空说明回答越过了证据允许的边界，每条都带类型、主张和原因。另有 `notices` 单独放「说不清」的提示 —— **「说不清」不等于「说错了」**，模型若只读 violations 会漏掉这一块。
 
 `context_expired` / `context_missing` 是**快照问题**，不等于回答错了：重新取一份 context 再核验就行。
+
+每次核验都会往观察日志追加一条记录，并用 `parent_observe_id` 指回当初那份 context —— 这样「哪次核验修好了哪次回答」在日志里追得回。
 
 ### `wiki_observe` —— 诊断
 
@@ -249,10 +251,10 @@ tests/          smoke / status / lint / explain / api / help / contract / watch 
 ```
 
 ```bash
-node --run test                                    # 跑样例库，不需要本地知识库
+npm test                                           # 跑样例库，不需要本地知识库
 node bin/cli.mjs search 上下文 --root=examples/sample-wiki
 WIKI_ROOT="/path/your/wiki" node tests/smoke.mjs   # 拿自己的库跑通就行（不校验答案）
-node --run probe -- --root "/path/your/wiki"       # 攒一行检索质量趋势
+npm run probe -- --root "/path/your/wiki"          # 攒一行检索质量趋势
 node tools/preview.mjs                             # 出 preview/panel.html，浏览器直接看面板
 node tools/preview.mjs --diag                      # 同上，并量一遍宽度 / 截断 / 溢出 / 对比度
 ```
@@ -263,7 +265,7 @@ node tools/preview.mjs --diag                      # 同上，并量一遍宽度
 WIKI_ROOT="/path/your/知识层-wiki" WIKI_TOOLS="/path/your/工具-tools" node tests/gateway.mjs
 ```
 
-发版：改 `version` → `node --run test` 全绿 → `npm pack --dry-run` 看一眼打包内容（`files` 只含 `lib`/`bin`/`docs`/`examples`/`README.md`/`LICENSE`/`cordis.patch.yml`，`preview/` 与 `tools/` 不进包）→ `npm publish`。本机 npm 常是未登录状态（`npm whoami` 报 `need auth`），发布前先在浏览器里确认 token。
+发版：改 `version` → `npm test` 全绿（`scripts.test` 只调 `node tests/*.mjs`，所以 20.x 也能跑；`node --run test` 要 Node 22+，别在低版本上用它，也别拿它当门槛的证明）→ `npm pack --dry-run` 看一眼打包内容（`files` 只含 `lib`/`bin`/`docs`/`examples`/`README.md`/`LICENSE`/`cordis.patch.yml`，`preview/` 与 `tools/` 不进包）→ `npm publish`。发布前先 `npm whoami --registry=https://registry.npmjs.org/` 确认已登录（本机 token 在 `.npmrc` 的 `//registry.npmjs.org/:_authToken=`；注意 `npm config get registry` 指向 npmmirror，而 npmmirror 那边不认这个 token，登录状态要显式指定 registry 去查）。
 
 改样式的两条经验：
 
