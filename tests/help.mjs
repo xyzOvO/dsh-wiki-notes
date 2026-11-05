@@ -34,7 +34,7 @@ const ctx = {
   logger: { info() {}, warn() {} },
   on() {},
   webServer: { register: () => () => {} },
-  tools: { register: (definition) => { registered = definition; return () => {} } },
+  tools: { register: (definition) => { if (definition?.name === 'wiki_recall') registered = definition; return () => {} } },
 }
 const { apply } = await import('../lib/index.js')
 apply(ctx, { root: null })

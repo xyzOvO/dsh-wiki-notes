@@ -1,0 +1,31 @@
+{
+ "kind": "verify",
+ "contract_version": "1.0",
+ "context_id": "ctx_SAMPLE0001",
+ "status": "violations_found",
+ "violations": [
+  {
+   "type": "review_flag_missing",
+   "rule": "weak_evidence.review_flag_missing"
+  },
+  {
+   "type": "fabricated_quote",
+   "rule": "provenance.fabricated_quote"
+  },
+  {
+   "type": "unsupported_numeric_claim",
+   "rule": "numeric.claim_not_supported",
+   "status": "contradicted",
+   "claim": "五道题",
+   "reason": "同指标同范围（重庆·省考）证据是 4 题，答复写的是 五道题",
+   "page": "综合-syntheses/申论.md"
+  }
+ ],
+ "checked_rules": 10,
+ "notices": [],
+ "snapshot_created": "2026-11-05T06:18:00+08:00",
+ "timing_ms": {
+  "total": null
+ },
+ "_note": "伪造引文 + 中文数字错，两条一起报"
+}

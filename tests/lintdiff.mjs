@@ -30,7 +30,7 @@ function register() {
     logger: { info() {}, warn() {} },
     on() {},
     webServer: { register: () => () => {} },
-    tools: { register: (item) => { definition = item; return () => {} } },
+    tools: { register: (item) => { if (item?.name === 'wiki_recall') definition = item; return () => {} } },
     systemPrompt: { context: () => () => {} },
   }
   apply(ctx, { root: wiki })

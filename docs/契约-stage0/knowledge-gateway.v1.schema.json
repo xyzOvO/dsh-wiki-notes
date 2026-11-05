@@ -1,0 +1,1180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh-wiki-notes.local/contracts/knowledge-gateway.v1.json",
+  "title": "dsh-wiki-notes · LLMWiki Knowledge Gateway Contract v1.0",
+  "description": "三个 MCP 工具（wiki_context / wiki_verify / wiki_observe）共用的线缆契约。判别字段 kind。所有证据判定由 Python 管线计算，插件只做参数校验与转发。",
+  "type": "object",
+  "required": [
+    "kind",
+    "contract_version"
+  ],
+  "properties": {
+    "kind": {
+      "enum": [
+        "context",
+        "verify",
+        "observe",
+        "error",
+        "observe_stats"
+      ]
+    },
+    "contract_version": {
+      "const": "1.0"
+    },
+    "plugin_version": {
+      "type": "string",
+      "examples": [
+        "1.4.0"
+      ]
+    },
+    "bridge_version": {
+      "type": "string",
+      "examples": [
+        "0.1.0"
+      ]
+    },
+    "pipeline_version": {
+      "type": "string",
+      "examples": [
+        "2026-11-05"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/context"
+    },
+    {
+      "$ref": "#/$defs/verify"
+    },
+    {
+      "$ref": "#/$defs/observe"
+    },
+    {
+      "$ref": "#/$defs/error_envelope"
+    },
+    {
+      "$ref": "#/$defs/observe_stats"
+    }
+  ],
+  "$defs": {
+    "err": {
+      "type": "object",
+      "description": "运行环境故障。与 status.support 严格分离：这里是「跑不起来」，那边是「知识不足」。",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "E_QUERY_EMPTY",
+            "E_CONTRACT_VERSION_MISMATCH",
+            "E_PYTHON_UNAVAILABLE",
+            "E_BRIDGE_SPAWN_FAILED",
+            "E_BRIDGE_TIMEOUT",
+            "E_BRIDGE_CRASH",
+            "E_BRIDGE_BAD_JSON",
+            "E_CONTEXT_NOT_FOUND",
+            "E_CONTEXT_EXPIRED",
+            "E_CONTEXT_CORRUPT",
+            "E_VERIFY_EMPTY_ANSWER",
+            "E_ENGINE_UNAVAILABLE",
+            "E_WIKI_ROOT_MISSING",
+            "E_INTERNAL"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "stage": {
+          "enum": [
+            "plan",
+            "retrieve",
+            "read",
+            "extract",
+            "policy",
+            "observe",
+            "bridge",
+            "validate",
+            "snapshot",
+            "import",
+            "build",
+            "verify",
+            "input",
+            "argv"
+          ]
+        },
+        "detail": {
+          "type": [
+            "object",
+            "string",
+            "null"
+          ],
+          "description": "诊断细节；环境类错误给异常的字符串形式"
+        }
+      }
+    },
+    "engine_slot": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "ok",
+            "empty",
+            "error",
+            "timeout",
+            "disabled"
+          ]
+        },
+        "candidates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queries_run": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "elapsed_ms": {
+          "type": "number"
+        },
+        "error": {
+          "$ref": "#/$defs/err"
+        }
+      }
+    },
+    "found_by": {
+      "type": "object",
+      "required": [
+        "query_id",
+        "engine"
+      ],
+      "properties": {
+        "query_id": {
+          "type": "string"
+        },
+        "unit_query": {
+          "type": "string"
+        },
+        "unit_variant": {
+          "enum": [
+            "original",
+            "decomposed",
+            "keyword",
+            "unknown"
+          ]
+        },
+        "engine": {
+          "enum": [
+            "search.py",
+            "wiki_recall",
+            "injected"
+          ]
+        },
+        "rank": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "tier": {
+          "type": [
+            "integer",
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "engine"
+      ],
+      "properties": {
+        "engine": {
+          "enum": [
+            "search.py",
+            "wiki_recall",
+            "injected"
+          ]
+        },
+        "rank": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "support": {
+      "type": "object",
+      "required": [
+        "slot",
+        "quote_support",
+        "quote",
+        "section",
+        "page"
+      ],
+      "properties": {
+        "slot": {
+          "type": "string"
+        },
+        "quote_support": {
+          "enum": [
+            "supported",
+            "conditional",
+            "clue"
+          ],
+          "description": "supported=直接支持；conditional=有条件支持（note 必填）；clue=只是线索，不能当支持用，只能用来引路"
+        },
+        "support_confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "unknown"
+          ]
+        },
+        "needs_review": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "conditional 时必须非空"
+        },
+        "section": {
+          "type": "string"
+        },
+        "quote": {
+          "type": "string",
+          "description": "必须是页面原文子串"
+        },
+        "page": {
+          "type": "string",
+          "description": "库根相对路径"
+        },
+        "relation": {
+          "enum": [
+            "core",
+            "related",
+            "clue"
+          ]
+        },
+        "method": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "values": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "evidence_page": {
+      "type": "object",
+      "required": [
+        "page",
+        "title",
+        "page_type",
+        "source_relation",
+        "evidence_grade"
+      ],
+      "properties": {
+        "page": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "page_type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "页面 frontmatter 的状态"
+        },
+        "sources": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "source_relation": {
+          "enum": [
+            "core",
+            "related",
+            "clue"
+          ]
+        },
+        "evidence_grade": {
+          "enum": [
+            "direct",
+            "related",
+            "weak",
+            "unknown"
+          ]
+        },
+        "retrieval_mode": {
+          "type": "string"
+        },
+        "matched": {
+          "type": "object"
+        },
+        "found_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/found_by"
+          }
+        },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/provenance"
+          }
+        },
+        "supports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/support"
+          }
+        }
+      }
+    },
+    "evidence_item": {
+      "type": "object",
+      "description": "去重后的证据单元：同段内容多页出现时一条证据、多个出处。",
+      "required": [
+        "evidence_id",
+        "slot",
+        "quote",
+        "provenance"
+      ],
+      "properties": {
+        "evidence_id": {
+          "type": "string"
+        },
+        "slot": {
+          "type": "string"
+        },
+        "quote": {
+          "type": "string"
+        },
+        "page_count": {
+          "type": "integer"
+        },
+        "engine_count": {
+          "type": "integer"
+        },
+        "near_duplicate": {
+          "type": "boolean"
+        },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "page"
+            ],
+            "properties": {
+              "page": {
+                "type": "string"
+              },
+              "section": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "missing": {
+      "type": "object",
+      "required": [
+        "slot",
+        "reason"
+      ],
+      "properties": {
+        "slot": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "not_found",
+            "not_verifiable",
+            "not_covered_in_wiki",
+            "recorded_unresolved"
+          ]
+        },
+        "status": {
+          "enum": [
+            "unresolved"
+          ]
+        },
+        "must_preserve_disagreement": {
+          "type": "boolean"
+        }
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string"
+              },
+              "value": {
+                "type": [
+                  "string",
+                  "number",
+                  "null"
+                ]
+              },
+              "quote": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "status_block": {
+      "type": "object",
+      "description": "三个维度互相独立，不许互相推导。",
+      "required": [
+        "retrieval",
+        "support",
+        "stage"
+      ],
+      "properties": {
+        "retrieval": {
+          "enum": [
+            "none",
+            "direct",
+            "related",
+            "weak_only",
+            "unknown"
+          ],
+          "description": "检索层面：找到的页面有多可信"
+        },
+        "support": {
+          "enum": [
+            "sufficient",
+            "partial",
+            "insufficient"
+          ],
+          "description": "证据层面：找到的东西能不能回答这个槽位"
+        },
+        "stage": {
+          "enum": [
+            "no_candidates",
+            "unreadable",
+            "no_evidence",
+            "slot_unfilled",
+            "ok"
+          ],
+          "description": "管线停在哪一步"
+        },
+        "degraded": {
+          "type": "boolean",
+          "description": "有引擎故障/降级时 true；此时 support 不可单独采信"
+        },
+        "degraded_sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "kind",
+        "contract_version",
+        "request_id",
+        "context_id",
+        "query",
+        "status",
+        "engines",
+        "evidence",
+        "missing",
+        "unresolved",
+        "conflicts",
+        "answer",
+        "timing_ms"
+      ],
+      "properties": {
+        "kind": {
+          "const": "context"
+        },
+        "contract_version": {
+          "const": "1.0"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^req_[A-Za-z0-9]+$"
+        },
+        "context_id": {
+          "type": "string",
+          "pattern": "^ctx_[A-Za-z0-9]+$"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan": {
+          "type": "object",
+          "properties": {
+            "original_query": {
+              "type": "string"
+            },
+            "query_units": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "query"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "query": {
+                    "type": "string"
+                  },
+                  "query_variant": {
+                    "enum": [
+                      "original",
+                      "decomposed",
+                      "keyword"
+                    ]
+                  },
+                  "slot": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "anchors": {
+                    "type": "array"
+                  }
+                }
+              }
+            },
+            "anchors": {
+              "type": "array"
+            },
+            "has_constraint_anchor": {
+              "type": "boolean"
+            }
+          }
+        },
+        "engines": {
+          "type": "object",
+          "description": "两引擎结果永不合分、永不互推。",
+          "required": [
+            "search",
+            "wiki_recall"
+          ],
+          "properties": {
+            "requested": {
+              "enum": [
+                "both",
+                "search",
+                "plugin"
+              ]
+            },
+            "search": {
+              "$ref": "#/$defs/engine_slot"
+            },
+            "wiki_recall": {
+              "$ref": "#/$defs/engine_slot"
+            }
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/status_block"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence_page"
+          }
+        },
+        "evidence_items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence_item"
+          }
+        },
+        "missing": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/missing"
+          }
+        },
+        "unresolved": {
+          "type": "array"
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/conflict"
+          }
+        },
+        "conflict_status": {
+          "enum": [
+            "none_detected",
+            "conflict",
+            "incomparable",
+            "not_applicable",
+            "not_checked"
+          ]
+        },
+        "metrics": {
+          "type": "object"
+        },
+        "answer": {
+          "type": "object",
+          "required": [
+            "policy",
+            "constraints",
+            "contract_text"
+          ],
+          "properties": {
+            "policy": {
+              "type": "object"
+            },
+            "constraints": {
+              "type": "object"
+            },
+            "contract_text": {
+              "type": "string"
+            }
+          }
+        },
+        "observe_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^obs_[A-Za-z0-9]+$"
+        },
+        "timing_ms": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "number"
+            },
+            "plan": {
+              "type": "number"
+            },
+            "retrieve": {
+              "type": "number"
+            },
+            "read": {
+              "type": "number"
+            },
+            "extract": {
+              "type": "number"
+            },
+            "policy": {
+              "type": "number"
+            },
+            "observe": {
+              "type": "number"
+            }
+          }
+        },
+        "error": {
+          "$ref": "#/$defs/err"
+        },
+        "support_reason": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/support_reason"
+            }
+          ],
+          "description": "F3：support_status 的可解释性。不属于 required —— 老调用方不传不报错。"
+        }
+      }
+    },
+    "violation": {
+      "type": "object",
+      "required": [
+        "type",
+        "rule"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "conditional_limit_missing",
+            "answered_unfilled_slot",
+            "gap_not_disclosed",
+            "unresolved_disclosure_missing",
+            "unresolved_arbitrated",
+            "review_flag_missing",
+            "duplicate_as_independent",
+            "fabricated_quote",
+            "conclusion_without_evidence",
+            "unsupported_numeric_claim",
+            "numeric_check_failed"
+          ],
+          "description": "契约语义层类型"
+        },
+        "rule": {
+          "type": "string",
+          "description": "管线原始规则名，如 conditional.limit_not_with_claim"
+        },
+        "slot": {
+          "type": "string"
+        },
+        "claim": {
+          "type": "string",
+          "description": "被核验的回答原文片段（数值主张）"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "page": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "contradicted",
+            "scope_mismatch",
+            "unverifiable"
+          ],
+          "description": "数值判据的判定态：contradicted=同指标同范围数值冲突；scope_mismatch=证据适用范围不符；unverifiable=有一侧范围未知，不能视为匹配"
+        }
+      }
+    },
+    "verify": {
+      "type": "object",
+      "required": [
+        "kind",
+        "contract_version",
+        "context_id",
+        "status",
+        "violations"
+      ],
+      "properties": {
+        "kind": {
+          "const": "verify"
+        },
+        "contract_version": {
+          "const": "1.0"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "context_id": {
+          "type": "string",
+          "pattern": "^ctx_[A-Za-z0-9]+$"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "violations_found",
+            "context_missing",
+            "context_expired",
+            "context_corrupt"
+          ]
+        },
+        "violations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/violation"
+          }
+        },
+        "checked_rules": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "本次实际参与核验的规则条数；快照缺失时为空"
+        },
+        "snapshot_created": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "快照创建时间；快照缺失时为空"
+        },
+        "timing_ms": {
+          "type": "object"
+        },
+        "error": {
+          "$ref": "#/$defs/err"
+        },
+        "notices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/notice"
+          },
+          "description": "非违规的核验提示；与 violations 分开，避免把「说不清」当成「说错了」"
+        }
+      }
+    },
+    "observe": {
+      "type": "object",
+      "required": [
+        "kind",
+        "contract_version",
+        "observe_id",
+        "ts"
+      ],
+      "properties": {
+        "kind": {
+          "const": "observe"
+        },
+        "contract_version": {
+          "const": "1.0"
+        },
+        "observe_id": {
+          "type": "string",
+          "pattern": "^obs_[A-Za-z0-9]+$"
+        },
+        "context_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ts": {
+          "type": "string"
+        },
+        "engine": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/status_block"
+        },
+        "metrics": {
+          "type": "object"
+        },
+        "logic": {
+          "type": "string",
+          "description": "查询逻辑清单（锚点/子问题/关键词），不含正文引文"
+        },
+        "timing_ms": {
+          "type": "object"
+        },
+        "error": {
+          "$ref": "#/$defs/err"
+        }
+      }
+    },
+    "notice": {
+      "type": "object",
+      "required": [
+        "rule",
+        "claim"
+      ],
+      "properties": {
+        "rule": {
+          "type": "string"
+        },
+        "claim": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "description": "不阻断核验、但必须让调用方看见的提示（如 unverifiable 的数值主张）"
+    },
+    "support_reason_item": {
+      "type": "object",
+      "description": "一条可追溯的原因：code 是机器可判的原因码，detail 是人能读懂的一句话，slots/engines/stage 指向导致该原因的槽位、引擎或管线阶段。",
+      "required": [
+        "code",
+        "label",
+        "detail"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "conflicting_evidence",
+            "no_candidates",
+            "no_usable_evidence",
+            "recorded_unresolved",
+            "required_slots_missing",
+            "partial_slot_coverage",
+            "conditional_evidence_only",
+            "scope_gap",
+            "conflict_candidate",
+            "engine_degraded",
+            "all_required_slots_supported",
+            "unknown"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "description": "原因码的中文短标签"
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "description": "为什么得到该原因，必须能追溯到实际槽位/证据/管线状态"
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "engines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stage": {
+          "type": "string",
+          "description": "pipeline.stage 的值"
+        }
+      },
+      "additionalProperties": false
+    },
+    "support_reason": {
+      "type": "object",
+      "description": "解释 support_status 是怎么来的。只解释现有判定，不改变 support_status、证据、provenance 或 answer_policy 结论；不判断用户答案对错。",
+      "required": [
+        "primary",
+        "primary_label",
+        "reasons"
+      ],
+      "properties": {
+        "primary": {
+          "type": "string",
+          "enum": [
+            "conflicting_evidence",
+            "no_candidates",
+            "no_usable_evidence",
+            "recorded_unresolved",
+            "required_slots_missing",
+            "partial_slot_coverage",
+            "conditional_evidence_only",
+            "scope_gap",
+            "conflict_candidate",
+            "engine_degraded",
+            "all_required_slots_supported",
+            "unknown"
+          ],
+          "description": "解释 support_status 本身的主原因；有多个原因时取严重度最高的一条"
+        },
+        "primary_label": {
+          "type": "string"
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "description": "全部可识别原因，按严重度排序，不因 primary 而丢弃",
+          "items": {
+            "$ref": "#/$defs/support_reason_item"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "error_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "失败响应。业务失败也走 200 + 这个信封，调用方按 error.code 分诊：E_PYTHON_UNAVAILABLE / E_BRIDGE_* 是环境问题，E_CONTEXT_* 是快照问题，E_QUERY_EMPTY / E_VERIFY_EMPTY_ANSWER 是入参问题。",
+      "required": [
+        "kind",
+        "contract_version",
+        "error"
+      ],
+      "properties": {
+        "kind": {
+          "const": "error"
+        },
+        "contract_version": {
+          "const": "1.0"
+        },
+        "plugin_version": {
+          "type": "string"
+        },
+        "bridge_version": {
+          "type": "string"
+        },
+        "pipeline_version": {
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/$defs/err"
+        }
+      }
+    },
+    "observe_stats": {
+      "type": "object",
+      "required": [
+        "kind",
+        "contract_version",
+        "observe_id",
+        "ts",
+        "window",
+        "totals"
+      ],
+      "properties": {
+        "kind": {
+          "const": "observe_stats"
+        },
+        "contract_version": {
+          "const": "1.0"
+        },
+        "observe_id": {
+          "type": "string",
+          "pattern": "^obs_[A-Za-z0-9]+$"
+        },
+        "ts": {
+          "type": "string"
+        },
+        "window": {
+          "type": "object",
+          "required": [
+            "days",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "days": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          }
+        },
+        "totals": {
+          "type": "object",
+          "required": [
+            "contexts",
+            "verifies"
+          ],
+          "properties": {
+            "contexts": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "verifies": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "legacy": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "malformed": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "support_distribution": {
+          "type": "object"
+        },
+        "retrieval_distribution": {
+          "type": "object"
+        },
+        "support_reason_distribution": {
+          "type": "object"
+        },
+        "violation_types": {
+          "type": "object"
+        },
+        "recent": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "timing_ms": {
+          "type": "object"
+        },
+        "revision": {
+          "type": "object",
+          "properties": {
+            "contexts_verified": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "corrected": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unresolved": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "correction_rate": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "sequences": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+ "kind": "verify",
+ "contract_version": "1.0",
+ "context_id": "ctx_SAMPLE0001",
+ "status": "ok",
+ "violations": [],
+ "checked_rules": 10,
+ "notices": [],
+ "snapshot_created": "2026-11-05T06:18:00+08:00",
+ "timing_ms": {
+  "total": null
+ },
+ "_note": "正确答复：数值·指标·范围一致 → supported，不误报"
+}

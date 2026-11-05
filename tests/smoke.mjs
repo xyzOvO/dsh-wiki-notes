@@ -26,7 +26,8 @@ const logger = {
   warn: (message) => process.stderr.write(`[warn] ${message}\n`),
 }
 const ctx = {
-  tools: { register: (definition) => { registered.push(definition); return () => {} } },
+  // 现在会注册三个工具（wiki_recall + 网关两个），这里只取检索工具
+  tools: { register: (definition) => { if (definition?.name === 'wiki_recall') registered.push(definition); return () => {} } },
   logger,
   on: () => {},
 }
@@ -95,7 +96,7 @@ if (typeof bogus?.error !== 'string' && bogus?.mode !== 'error') fail('坏 mode 
 // 库路径指错时必须说「扫到 0 页，路径可能不对」，
 // 而不是「库里没有命中」—— 后者会让模型以为你真的没记过这条。
 const emptyCtx = {
-  tools: { register: (d) => { emptyCtx.registered = d; return () => {} } },
+  tools: { register: (d) => { if (d?.name === 'wiki_recall') emptyCtx.registered = d; return () => {} } },
   logger: { info() {}, warn() {} },
   on: () => {},
 }

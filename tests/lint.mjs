@@ -161,7 +161,7 @@ ok('list limit 0 退回默认 40', zeroed.shown === 40, `shown=${zeroed.shown}`)
 {
   let definition = null
   const ctx = {
-    tools: { register: (d) => { definition = d; return () => {} } },
+    tools: { register: (d) => { if (d?.name === 'wiki_recall') definition = d; return () => {} } },
     webServer: { register: () => () => {} },
     systemPrompt: { context: () => () => {} },
     logger: { info() {}, warn() {} },

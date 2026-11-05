@@ -1,0 +1,27 @@
+{
+ "kind": "verify",
+ "contract_version": "1.0",
+ "context_id": "ctx_SAMPLE0001",
+ "status": "violations_found",
+ "violations": [
+  {
+   "type": "review_flag_missing",
+   "rule": "weak_evidence.review_flag_missing"
+  },
+  {
+   "type": "unsupported_numeric_claim",
+   "rule": "numeric.claim_unverifiable",
+   "status": "unverifiable",
+   "claim": "6 道题",
+   "reason": "答复限定了6 道题 的年份口径，证据只写「重庆·省考」，不能据此判定对错，需复核（答复未标复核）",
+   "page": "综合-syntheses/申论.md"
+  }
+ ],
+ "checked_rules": 10,
+ "notices": [],
+ "snapshot_created": "2026-11-05T06:18:00+08:00",
+ "timing_ms": {
+  "total": null
+ },
+ "_note": "年份口径缺口：既不能 supported 也不能 contradicted，判 unverifiable 并要求复核"
+}

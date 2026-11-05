@@ -1,0 +1,20 @@
+{
+ "kind": "verify",
+ "contract_version": "1.0",
+ "context_id": "ctx_SAMPLE_EXPIRED",
+ "violations": [],
+ "notices": [],
+ "timing_ms": {
+  "total": 8.4
+ },
+ "status": "context_expired",
+ "error": {
+  "code": "E_CONTEXT_EXPIRED",
+  "message": "快照已过期（创建于 2026-11-05T06:20:59+0800，有效期 1 秒）",
+  "retryable": true,
+  "stage": "snapshot",
+  "detail": null
+ },
+ "snapshot_created": "2026-11-05T06:20:59+0800",
+ "_note": "快照过期：必须让调用方重新取上下文，而不是拿旧证据继续核验"
+}

@@ -25,7 +25,7 @@ function check(name, ok, detail = '') {
 function makeCtx() {
   const state = { sections: [], definition: null }
   const ctx = {
-    tools: { register: (d) => { state.definition = d; return () => {} } },
+    tools: { register: (d) => { if (d?.name === 'wiki_recall') state.definition = d; return () => {} } },
     systemPrompt: { context: (options) => { state.sections.push(options); return () => {} } },
     webServer: { register: () => () => {} },
     logger: { info() {}, warn() {} },

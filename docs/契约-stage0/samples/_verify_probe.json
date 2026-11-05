@@ -1,0 +1,46 @@
+[
+  {
+    "answer": "wrong-five",
+    "ok": false,
+    "raw_violations": [
+      {
+        "rule": "weak_evidence.review_flag_missing"
+      }
+    ],
+    "mapped": [
+      {
+        "type": "review_flag_missing",
+        "rule": "weak_evidence.review_flag_missing"
+      }
+    ]
+  },
+  {
+    "answer": "right-with-limit",
+    "ok": true,
+    "raw_violations": [],
+    "mapped": []
+  },
+  {
+    "answer": "fabricated-quote",
+    "ok": false,
+    "raw_violations": [
+      {
+        "rule": "weak_evidence.review_flag_missing"
+      },
+      {
+        "rule": "provenance.fabricated_quote",
+        "quote": "申论五道题满分一百分必须全部答完"
+      }
+    ],
+    "mapped": [
+      {
+        "type": "review_flag_missing",
+        "rule": "weak_evidence.review_flag_missing"
+      },
+      {
+        "type": "fabricated_quote",
+        "rule": "provenance.fabricated_quote"
+      }
+    ]
+  }
+]

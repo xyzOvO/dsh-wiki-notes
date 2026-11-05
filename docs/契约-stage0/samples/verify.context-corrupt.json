@@ -1,0 +1,20 @@
+{
+ "kind": "verify",
+ "contract_version": "1.0",
+ "context_id": "ctx_SAMPLE_CORRUPT",
+ "violations": [],
+ "notices": [],
+ "timing_ms": {
+  "total": 1.0
+ },
+ "status": "context_corrupt",
+ "error": {
+  "code": "E_CONTEXT_CORRUPT",
+  "message": "快照损坏，无法作为核验依据",
+  "retryable": false,
+  "stage": "snapshot",
+  "detail": "payload 校验失败（内容被改动或写入不完整）"
+ },
+ "snapshot_created": null,
+ "_note": "payload 被改动：sha256 校验失败，明确报 corrupt，不冒充 not_found"
+}
