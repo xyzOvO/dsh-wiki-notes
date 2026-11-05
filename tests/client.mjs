@@ -124,6 +124,7 @@ const callGuards = [
   ['命中率分母口径写清楚', '命中率分母不含 verify / observe'],
   ['空态有话可说', '还没有调用记录'],
   ['轮询间隔 2 秒', 'CALLS_POLL_MS'],
+  ['清空要二次确认，不弹系统对话框', '确认清空？'],
 ]
 for (const [label, needle] of callGuards) {
   if (!source.includes(needle)) throw new Error(`缺少调用页实现：${label}（找不到 ${needle}）`)

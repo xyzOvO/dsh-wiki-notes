@@ -1,6 +1,6 @@
 {
   "name": "dsh-wiki-notes",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "type": "module",
   "description": "Read-only Markdown knowledge-base retrieval for DeepSeek Harness: one wiki_recall tool (search/page/list/overview/lint/draft) returning the matching section's full text with page-level citations, plus three knowledge-gateway tools (wiki_context / wiki_verify / wiki_observe) that delegate evidence judgement to the local LLM-Wiki Python pipeline. 中文：本地 Markdown 笔记库检索插件，一次调用返回命中小节正文与出处，另带健康检查与回写骨架；新增知识网关三工具（wiki_context / wiki_verify / wiki_observe），证据判定交给本地 Python 管线，插件只负责调用与错误隔离。",
   "keywords": [
@@ -37,7 +37,7 @@
     "node": ">=20.13.0"
   },
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/status.mjs && node tests/params.mjs && node tests/fields.mjs && node tests/robust.mjs && node tests/lint.mjs && node tests/lintdiff.mjs && node tests/config.mjs && node tests/explain.mjs && node tests/cli.mjs && node tests/api.mjs && node tests/help.mjs && node tests/contract.mjs && node tests/topics.mjs && node tests/draft.mjs && node tests/watch.mjs && node tests/client.mjs",
+    "test": "node tests/smoke.mjs && node tests/status.mjs && node tests/params.mjs && node tests/fields.mjs && node tests/robust.mjs && node tests/lint.mjs && node tests/lintdiff.mjs && node tests/config.mjs && node tests/explain.mjs && node tests/cli.mjs && node tests/api.mjs && node tests/help.mjs && node tests/contract.mjs && node tests/topics.mjs && node tests/draft.mjs && node tests/calls.mjs && node tests/watch.mjs && node tests/client.mjs",
     "cli": "node bin/cli.mjs",
     "probe": "node tools/probe.mjs"
   },
