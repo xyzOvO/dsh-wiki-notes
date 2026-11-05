@@ -12,9 +12,12 @@ import {
   PROMPT_MAX_CHARS,
   mergePromptConfig,
   mergeTopicConfig,
+  normalizeCallsConfig,
+  readCallsConfig,
   readConfigFile,
   readPromptConfig,
   readTopicConfig,
+  writeCallsConfig,
   writeTopicConfig,
   writeConfigFile,
   writePromptConfig,
@@ -95,6 +98,18 @@ const wrongType = mergePromptConfig(current, { enabled: 'yes' })
 check('合并：类型不对的字段当没写', wrongType.enabled === true && wrongType.override === '整句替换', JSON.stringify(wrongType))
 const topicMerged = mergeTopicConfig({ minCount: 1, stopwords: false }, { minCount: 3 })
 check('合并主题词：保留 stopwords', topicMerged.stopwords === false && topicMerged.minCount === 3, JSON.stringify(topicMerged))
+
+// 调用记录配置：缺字段按默认补齐，enabled 只认显式 false
+const callsEmpty = normalizeCallsConfig({})
+check('calls 配置：空对象走默认（开着、路径空）', callsEmpty.enabled === true && callsEmpty.log === '', JSON.stringify(callsEmpty))
+const callsOff = normalizeCallsConfig({ enabled: false })
+check('calls 配置：enabled=false 才关', callsOff.enabled === false, JSON.stringify(callsOff))
+const callsTruthy = normalizeCallsConfig({ enabled: 'no' })
+check('calls 配置：非 false 的值不算关闭', callsTruthy.enabled === true, JSON.stringify(callsTruthy))
+const callsLog = normalizeCallsConfig({ log: '  /tmp/x.jsonl  ' })
+check('calls 配置：log 去空白', callsLog.log === '/tmp/x.jsonl', JSON.stringify(callsLog))
+check('calls 配置：非对象返回 null', normalizeCallsConfig(null) === null && normalizeCallsConfig([1]) === null)
+check('calls 配置：读不到时给默认值', readCallsConfig('/不存在的目录').enabled === true)
 
 if (failed > 0) {
   process.stderr.write(`config smoke 失败 ${failed} 项\n`)
