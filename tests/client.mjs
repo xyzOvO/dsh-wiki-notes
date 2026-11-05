@@ -93,11 +93,8 @@ const ctx = {
 
 moduleExports.apply(ctx)
 
-if (registrations.length !== 2) throw new Error(`期望注册 2 个 slot，实际 ${registrations.length}`)
-const settingsSlot = registrations.find((item) => item.options.id === 'wiki-notes')
-const callsSlot = registrations.find((item) => item.options.id === 'wiki-notes-calls')
-if (!settingsSlot || !callsSlot) throw new Error('两个 settings.section 没都注册上')
-const { options, component } = settingsSlot
+if (registrations.length !== 1) throw new Error(`期望注册 1 个 slot，实际 ${registrations.length}`)
+const { options, component } = registrations[0]
 console.log('✓ slot name:', options.name)
 console.log('✓ slot id:', options.id)
 console.log('✓ slot order:', options.order)
@@ -108,14 +105,12 @@ const tree = component({ sessionId: 'stub' })
 if (tree === null || typeof tree !== 'object') throw new Error('组件没有返回元素')
 console.log('✓ 组件可调用，根节点类型:', tree.type)
 
-// ---- 调用审计页 ----
-console.log('✓ 调用页 id:', callsSlot.options.id)
-if (callsSlot.options.order !== 48) throw new Error(`调用页 order 该是 48，实际 ${callsSlot.options.order}`)
-if (callsSlot.options.label() !== '知识库 · 调用') throw new Error(`调用页 label 不对：${callsSlot.options.label()}`)
-if (typeof callsSlot.component !== 'function') throw new Error('调用页组件不是函数')
-const callsTree = callsSlot.component({ sessionId: 'stub' })
-if (callsTree === null || typeof callsTree !== 'object') throw new Error('调用页组件没有返回元素')
-console.log('✓ 调用页可调用，根节点类型:', callsTree.type)
+// ---- 调用记录：是「知识库」页里的第二个页签，不是第二个一级入口 ----
+if (!source.includes("setTab('calls')")) throw new Error('知识库页里没有切到调用记录的页签')
+if (!source.includes("'调用记录'")) throw new Error('页签文案不对')
+if (source.includes('wiki-notes-calls')) throw new Error('不该再注册第二个 settings.section —— 它属于「知识库」页内部')
+if (!source.includes('h(WikiCallsSection, { embedded: true })')) throw new Error('调用记录没有以嵌入方式挂进知识库页')
+console.log('✓ 调用记录是页内页签，不是第二级入口')
 
 const callGuards = [
   ['调用页走 /calls 接口', "'/calls?limit='"],
