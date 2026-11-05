@@ -6,7 +6,7 @@
  * 一次跑没意义，连起来看才有意义。
  *
  * 用法：
- *   node tools/probe.mjs --queries tests/local/ab_baseline.json --root D:/笔记/LLM-Wiki
+ *   node tools/probe.mjs --queries tests/local/ab_baseline.json --root <你的库根目录>
  *   node tools/probe.mjs --no-save      # 只看这一次，不写趋势文件
  *
  * 查询文件格式：{ "查询词": ["期望的第一页名", "其它相关页名"], ... }

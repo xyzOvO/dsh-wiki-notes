@@ -17,8 +17,8 @@
 
 | 文件 | 说明 |
 | --- | --- |
-| `D:\笔记\LLM-Wiki\工具-tools\context_snapshot.py` | 新增：save / load / verify_answer / purge_expired + CLI |
-| `D:\笔记\LLM-Wiki\工具-tools\answer_policy.py` | `check_answer()` 现在同时返回 `notices`（原有数值判据的提示不再被吞掉） |
+| `<你的库根目录>\工具-tools\context_snapshot.py` | 新增：save / load / verify_answer / purge_expired + CLI |
+| `<你的库根目录>\工具-tools\answer_policy.py` | `check_answer()` 现在同时返回 `notices`（原有数值判据的提示不再被吞掉） |
 | `_tools\eval\eval_snapshot.py` | 新增：12 条验收（六条要求 × 细分） |
 | `docs\契约-stage0\knowledge-gateway.v1.schema.json` | 新增 `E_CONTEXT_CORRUPT` 与 `verify.status=context_corrupt` |
 | `docs\契约-stage0\samples\verify.context-expired.json` / `verify.context-corrupt.json` | 两份真实输出样例 |
