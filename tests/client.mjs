@@ -93,8 +93,11 @@ const ctx = {
 
 moduleExports.apply(ctx)
 
-if (registrations.length !== 1) throw new Error(`期望注册 1 个 slot，实际 ${registrations.length}`)
-const { options, component } = registrations[0]
+if (registrations.length !== 2) throw new Error(`期望注册 2 个 slot，实际 ${registrations.length}`)
+const settingsSlot = registrations.find((item) => item.options.id === 'wiki-notes')
+const callsSlot = registrations.find((item) => item.options.id === 'wiki-notes-calls')
+if (!settingsSlot || !callsSlot) throw new Error('两个 settings.section 没都注册上')
+const { options, component } = settingsSlot
 console.log('✓ slot name:', options.name)
 console.log('✓ slot id:', options.id)
 console.log('✓ slot order:', options.order)
@@ -104,6 +107,28 @@ if (typeof component !== 'function') throw new Error('slot 组件不是函数')
 const tree = component({ sessionId: 'stub' })
 if (tree === null || typeof tree !== 'object') throw new Error('组件没有返回元素')
 console.log('✓ 组件可调用，根节点类型:', tree.type)
+
+// ---- 调用审计页 ----
+console.log('✓ 调用页 id:', callsSlot.options.id)
+if (callsSlot.options.order !== 48) throw new Error(`调用页 order 该是 48，实际 ${callsSlot.options.order}`)
+if (callsSlot.options.label() !== '知识库 · 调用') throw new Error(`调用页 label 不对：${callsSlot.options.label()}`)
+if (typeof callsSlot.component !== 'function') throw new Error('调用页组件不是函数')
+const callsTree = callsSlot.component({ sessionId: 'stub' })
+if (callsTree === null || typeof callsTree !== 'object') throw new Error('调用页组件没有返回元素')
+console.log('✓ 调用页可调用，根节点类型:', callsTree.type)
+
+const callGuards = [
+  ['调用页走 /calls 接口', "'/calls?limit='"],
+  ['清空走 /calls/clear', "'/calls/clear'"],
+  ['开关走 /calls/config', "'/calls/config'"],
+  ['命中率分母口径写清楚', '命中率分母不含 verify / observe'],
+  ['空态有话可说', '还没有调用记录'],
+  ['轮询间隔 2 秒', 'CALLS_POLL_MS'],
+]
+for (const [label, needle] of callGuards) {
+  if (!source.includes(needle)) throw new Error(`缺少调用页实现：${label}（找不到 ${needle}）`)
+  console.log('✓ 调用页守卫:', label)
+}
 
 console.log('✓ CSS 已注入，长度:', (styleNodes.get('dsh-wiki-notes-styles')?.textContent ?? '').length)
 console.log('✓ effect 清理函数数量:', cleanups.length)
