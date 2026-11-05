@@ -2,11 +2,87 @@
 
 [![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-plugin-4B6EF5)](https://github.com/deepseek-ai)
 
-**Read-only retrieval for a folder of Markdown notes, exposed as one tool call.**
+**给你那堆 Markdown 笔记，接上四个能用的工具：查得到、读得出、核得住、看得见。**
 
-Built for [DeepSeek Harness](https://github.com/deepseek-ai). Instead of a 5-step loop — read the overview, read the index, shell out to a search script, open the page, chase its sources — `wiki_recall` returns **the matching section's full text plus a page-level citation** in one call.
+为 [DeepSeek Harness](https://github.com/deepseek-ai) 做的只读检索插件。旧的流程是五步：读总览 → 读索引 → 敲命令搜 → 打开那页 → 追它的来源。现在一次调用就把**命中小节的完整正文 + 出处**返回，模型自己接着答。
 
 > 中文文档从下面开始。实测：73 页的库，旧流程单次 ≈ 18.7k 字符，新流程 ≈ 2.5k。
+
+---
+
+## 目录
+
+| 你想知道 | 直接跳 |
+| --- | --- |
+| 这插件到底能干什么 | [四个工具](#四个工具) |
+| 我要先装上试试 | [装](#装) · [配](#配) |
+| 我自己的笔记该怎么写 | [库该长什么样](#库该长什么样) |
+| 检索为什么这么打分 | [检索质量](#检索质量) |
+| 它有没有偷看我的东西 | [只读，且不往外发](#只读且不往外发) |
+| 已知毛病 | [已知局限](#已知局限) |
+| 要改代码 | [目录 / 开发](#目录--开发) |
+
+---
+
+## 四个工具
+
+插件注册四个工具，用途不重叠，按顺序读就明白了：
+
+| 工具 | 一句话 | 什么时候用 |
+| --- | --- | --- |
+| **`wiki_recall`** | 检索库，拿到命中小节的正文与出处 | 「我的笔记里怎么写的？」 |
+| **`wiki_context`** | 检索 + 抽证据 + 标缺口 + 给回答约束，**一次做完** | 要引用笔记原文回答，或想知道「依据够不够」 |
+| **`wiki_verify`** | 拿已有的 context 核验一段回答，**不重新检索** | 答案写完了自查，特别是有数字的时候 |
+| **`wiki_observe`** | 查观察日志统计（调用次数、支持状态分布、违规类型） | 诊断，不参与回答 |
+
+### `wiki_recall` —— 检索
+
+一个工具，七种 mode：
+
+| mode | 干什么 | 参数 |
+| --- | --- | --- |
+| `search`（默认） | 关键词 AND 检索 | `query`、`limit`（5，≤12）、`sectionChars`（900，≤3000） |
+| `page` | 按页名/别名取整页 | `name`、`pageChars`（6000） |
+| `list` | 按类型/标签/状态列目录 | `type`、`tags`、`status`、`limit`（40，≤200） |
+| `overview` | 总览 + 规模行 + 最近日志 + 健康计数 | `pageChars`（4000）、`logLimit`（5，≤20） |
+| `lint` | 库健康检查：孤儿页、断链名字、缺字段、别名冲突、久未更新、无出链、草稿、index 与磁盘不一致；**并和上次体检对比，报出新增与已修** | `limit`（8，≤40）、`staleDays`（120） |
+| `draft` | 把好答案回写成新页的落盘骨架（目录、frontmatter、index 行、log 条），不写文件 | `title`、`type`、`tags`、`summary`、`sources` |
+| `help` | 用法与状态说明：七个 mode 各返回什么、`status` 各取值怎么读、参数默认值 | 无 |
+
+```jsonc
+{ "mode": "search", "query": "上下文 预算", "limit": 5 }
+```
+
+每条命中带 `kind`（note / raw-summary / source）、`sources`（来源数，**证据强度的唯一可靠代理**）、`status`、`gist`、`section`（命中小节正文，不是 90 字片段）、`citation`（`← [[页名]] §小节 → 路径`）、`brokenLinks`（指向不存在页的双链 = 「库里没依据」的硬信号），以及 `updated` 后面的**距今天数**（超过 180 天标「可能已过时」——三年前的结论和上周的长得一样，模型需要这个信号）。`overview` 额外给三项健康信号：index 有磁盘无、磁盘有 index 无、跨目录重名。
+
+### `wiki_context` —— 带证据的上下文
+
+要引用笔记原文回答、或需要知道「有没有依据 / 依据够不够 / 哪里是缺口」时用它，而不是自己连续调 `wiki_recall`。
+
+参数：`query`（必填）、`limit`（1–12，默认 5）、`engine`（`both` / `search` / `wiki_recall`，默认 `both`）、`ttl_seconds`（默认 1800）。
+
+返回里最重要的一条：**`status.support` 和 `status.degraded` 是两件事，必须分开看。**
+
+- `support` 说的是**知识够不够**（`sufficient` / `partial` / `insufficient`）。
+- `degraded` 说的是**引擎有没有坏**。它是布尔值，为真时说明某个检索通道挂了 —— 这时候不能把 `support` 当结论，那是拿不完整的检索结果下的判断。
+
+同时返回 `evidence`（证据页，含分级、支撑了哪个槽位）、`missing`（缺什么、为什么缺）、`conflicts`（冲突候选，**未裁决，别当成已确认的结论**）、`answer.contract_text`（给回答的约束：必须披露缺口、不得超出证据、引文须原文），以及一个 `context_id`。
+
+### `wiki_verify` —— 核验回答
+
+写完答案后自查（尤其含数字、范围、年份、题量分值这类主张时）用它。参数：`context_id` + `answer`。
+
+它不重新检索 —— 拿当初那份快照来比，所以快，也不受库里后来改动的影响。
+
+返回 `status` 与 `violations`：violations 非空说明回答越过了证据允许的边界，每条都带类型、主张和原因。另有 `notices` 单独放「说不清」的提示 —— **「说不清」不等于「说错了」**，模型若只读 violations 会漏掉这一块。
+
+`context_expired` / `context_missing` 是**快照问题**，不等于回答错了：重新取一份 context 再核验就行。
+
+### `wiki_observe` —— 诊断
+
+参数：`days`（1–365，默认 7）、`limit`（1–50，默认 10）。
+
+报观察窗口内的调用次数、支持状态分布、检索状态分布、违规类型分布，还有**修正情况**（核验过的 context 里已改正 / 仍未改正的比例）—— 这一项比违规总数更能反映核验到底有没有用。只读诊断，不参与回答，也不改检索行为。
 
 ---
 
@@ -56,31 +132,15 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 没配时工具会直接告诉你「还没配置知识库路径」，不会静默扫空目录。
 
+`wiki_context` / `wiki_verify` / `wiki_observe` 还需要一条 Python 通路（`bridge.python` + `bridge.toolsRoot`，后者是含 `wiki_bridge.py` 的目录）。没配的话这三个工具会明确报 `E_PYTHON_UNAVAILABLE` —— **不会假装成「知识库里没有」**。配置形状见 [docs/契约-stage0/阶段4-插件接入.md](docs/契约-stage0/阶段4-插件接入.md)。
+
 ---
 
-## 用
+## 模型怎么知道该查库
 
-| mode | 干什么 | 参数 |
-| --- | --- | --- |
-| `search`（默认） | 关键词 AND 检索 | `query`、`limit`（5，≤12）、`sectionChars`（900，≤3000） |
-| `page` | 按页名/别名取整页 | `name`、`pageChars`（6000） |
-| `list` | 按类型/标签/状态列目录 | `type`、`tags`、`status`、`limit`（40，≤200） |
-| `overview` | 总览 + 规模行 + 最近日志 + 健康计数 | `pageChars`（4000）、`logLimit`（5，≤20） |
-| `lint` | 库健康检查：孤儿页、断链名字、缺字段、别名冲突、久未更新、无出链、草稿、index 与磁盘不一致；**并和上次体检对比，报出新增与已修** | `limit`（8，≤40）、`staleDays`（120） |
-| `draft` | 把好答案回写成新页的落盘骨架（目录、frontmatter、index 行、log 条），不写文件 | `title`、`type`、`tags`、`summary`、`sources` |
-| `help` | 用法与状态说明：七个 mode 各返回什么、`status` 各取值怎么读、参数默认值 | 无 |
-
-```jsonc
-{ "mode": "search", "query": "上下文 预算", "limit": 5 }
-```
-
-每条命中带 `kind`（note / raw-summary / source）、`sources`（来源数，**证据强度的唯一可靠代理**）、`status`、`gist`、`section`（命中小节正文，不是 90 字片段）、`citation`（`← [[页名]] §小节 → 路径`）、`brokenLinks`（指向不存在页的双链 = 「库里没依据」的硬信号），以及 `updated` 后面的**距今天数**（超过 180 天标「可能已过时」——三年前的结论和上周的长得一样，模型需要这个信号）。`overview` 额外给三项健康信号：index 有磁盘无、磁盘有 index 无、跨目录重名。
-
-模型怎么知道该查库：插件会从你库里现有的 `标签` 算出主题词，注入一行（约 50 token，例如「本地知识库主题：上下文工程、ai、agent…」）。不带页数 —— 页数一变就会打掉提示词的前缀缓存，而它对「该不该查」没有帮助。换库自动变，所以问题沾这些主题时它自己会去查，不用你提醒。设置页里可以关掉（不占上下文）、换成自己的整段、或在末尾追加一句，改完下一回合生效。
+插件会从你库里现有的 `标签` 算出主题词，注入一行（约 50 token，例如「本地知识库主题：上下文工程、ai、agent…」）。不带页数 —— 页数一变就会打掉提示词的前缀缓存，而它对「该不该查」没有帮助。换库自动变，所以问题沾这些主题时它自己会去查，不用你提醒。设置页里可以关掉（不占上下文）、换成自己的整段、或在末尾追加一句，改完下一回合生效。
 
 主题词怎么挑：跳过 `总览`/`index` 这类结构页，跳过 `数据`/`工具`/`meta` 这类空泛标签，默认只留出现 ≥2 次的标签（设置页可改回 ≥1）。全被滤掉时退回不过滤的前五 —— 小库不至于一条提示都没有。
-
-> `limit` 默认 5，一次约 2.5–3k token。嫌多可以传 3 省四成，但默认留 5 —— 少一次往返比省四成更值钱。
 
 ---
 
@@ -139,6 +199,15 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 ---
 
+## 只读，且不往外发
+
+- 插件只读你的笔记：不写库、不改页、不修红链。
+- 检索在本地进程内跑，没有任何出站请求。
+- `wiki_context` / `wiki_verify` 调的是**你自己机器上的** Python 管线（`bridge.toolsRoot`），同样不出网。
+- 仓库里不含任何本机绝对路径或用户名；测试用环境变量拿真实路径（`WIKI_ROOT` / `WIKI_TOOLS`），不给就跑样例库。
+
+---
+
 ## 上下游（可选）
 
 - **进料**：[Obsidian Web Clipper](https://github.com/obsidianmd/obsidian-clipper) —— 网页剪藏成 Markdown 落进 raw 层。模板里写好 `类型` / `来源数量` / `标签`，本插件的 `kind`、`sources`、证据强度才有东西可用。
@@ -153,7 +222,10 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 - 每次调用全量扫描；70–100 页无所谓，再大一个数量级要上增量索引。
 - **重启后第一次扫描是冷盘读**：95 页实测 5,217ms（此后 29ms）。插件启动就预热一次，所以这段延迟通常落在你还没提问的时候；但第一条查询正好赶上也确实要等。
 - **面板没打开时 `/`、`Ctrl/⌘ + K` 不会有反应**：快捷键绑在面板上，而宿主的 `sidebarRightTabs` 只提供 `register()`，没有「打开 / 激活页签」的接口，插件没法从外面把面板叫出来。
-- 只读。不写库、不改页、不修红链。
+- **知识网关那套仍是两套实现**：JS 侧 `wiki_recall` 和 Python 侧 `wiki_context` 各自解析页面，差在结构解读层。统一方向未定。
+- **`unverifiable` 只在 `notices` 里**：模型若只看 `violations`，会漏掉「这个数字我核实不了」。
+- **观察日志无轮转**：只追加不清理，`legacy` 计数会随时间变大。
+- **快照不自动清理**，也没有滑动续期。
 
 ---
 
@@ -169,9 +241,11 @@ bin/cli.mjs     命令行，不装插件也能跑
 tools/probe.mjs 检索质量探针：hit@1 / hit@3 / Recall@5，追加趋势 CSV
 tools/preview.mjs 把面板渲染成静态页（真组件 + 真 CSS），改样式不必重启 DSH
 docs/库结构.md  库结构约定（这份才是一手文档）
+docs/README.md  文档导航页
 docs/superpowers/specs/  检索面板的设计稿
+docs/契约-stage0/  知识网关的设计与验收记录
 examples/       可跑的最小样例库
-tests/          smoke / status / lint / explain / api / help / contract / watch / client bundle
+tests/          smoke / status / lint / explain / api / help / contract / watch / client bundle / gateway
 ```
 
 ```bash
@@ -181,6 +255,12 @@ WIKI_ROOT="/path/your/wiki" node tests/smoke.mjs   # 拿自己的库跑通就行
 node --run probe -- --root "/path/your/wiki"       # 攒一行检索质量趋势
 node tools/preview.mjs                             # 出 preview/panel.html，浏览器直接看面板
 node tools/preview.mjs --diag                      # 同上，并量一遍宽度 / 截断 / 溢出 / 对比度
+```
+
+跑知识网关那两段真实通路，要给两个环境变量（不给就整段跳过，不会假装通过）：
+
+```bash
+WIKI_ROOT="/path/your/知识层-wiki" WIKI_TOOLS="/path/your/工具-tools" node tests/gateway.mjs
 ```
 
 发版：改 `version` → `node --run test` 全绿 → `npm pack --dry-run` 看一眼打包内容（`files` 只含 `lib`/`bin`/`docs`/`examples`/`README.md`/`LICENSE`/`cordis.patch.yml`，`preview/` 与 `tools/` 不进包）→ `npm publish`。本机 npm 常是未登录状态（`npm whoami` 报 `need auth`），发布前先在浏览器里确认 token。

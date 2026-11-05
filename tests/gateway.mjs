@@ -20,10 +20,15 @@ const tmp = mkdtempSync(path.join(os.tmpdir(), 'wiki-notes-gateway-'))
 const configFile = path.join(tmp, 'wiki-notes.config.json')
 process.env.DSH_WIKI_CONFIG = configFile
 
-const WIKI = 'D:\\笔记\\LLM-Wiki\\知识层-wiki'
-const TOOLS = 'D:\\笔记\\LLM-Wiki\\工具-tools'
-const PYTHON = process.env.WIKI_TEST_PYTHON || 'python'
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+// 库路径与工具目录不写死本机绝对路径（写死了会跟着仓库公开出去）：
+//   WIKI_ROOT   知识层目录（插件 root）
+//   WIKI_TOOLS  工具目录（含 wiki_bridge.py）
+// 两个都给齐才跑真实 Python 通路；只给 WIKI_ROOT 时用仓库里的样例库跑纯插件侧的断言。
+const WIKI = process.env.WIKI_ROOT || path.join(PLUGIN_ROOT, 'examples', 'sample-wiki')
+const TOOLS = process.env.WIKI_TOOLS || ''
+const HAS_PIPELINE = Boolean(process.env.WIKI_ROOT && process.env.WIKI_TOOLS)
+const PYTHON = process.env.WIKI_TEST_PYTHON || 'python'
 const PLUGIN_VERSION = JSON.parse(readFileSync(path.join(PLUGIN_ROOT, 'package.json'), 'utf8')).version
 
 // 起始配置：有库、没 bridge。先测「没配工具目录」这一路。
@@ -88,89 +93,96 @@ const badPython = await contextTool.execute({ query: '申论' })
 check('python 不存在 → E_PYTHON_UNAVAILABLE',
   badPython?.error?.code === 'E_PYTHON_UNAVAILABLE', JSON.stringify(badPython?.error))
 
-// --- 3. 真跑：插件 vs CLI 逐字段一致 -------------------------------------
-writeConfig({ bridge: { python: PYTHON, toolsRoot: TOOLS, timeoutMs: 180000, ttlSeconds: 1800 } })
+// 真实通路要真的调 Python 管线，所以两个环境变量都得给。
+// 没给就整段跳过——留参数校验与故障隔离那两段就够了，不能因为环境不齐就假装通过。
+if (HAS_PIPELINE) {
+  // --- 3. 真跑：插件 vs CLI 逐字段一致 -------------------------------------
+  writeConfig({ bridge: { python: PYTHON, toolsRoot: TOOLS, timeoutMs: 180000, ttlSeconds: 1800 } })
 
-const QUERY = '重庆 申论 考几道题'
-const viaPlugin = await contextTool.execute({ query: QUERY, limit: 4 })
+  const QUERY = '重庆 申论 考几道题'
+  const viaPlugin = await contextTool.execute({ query: QUERY, limit: 4 })
 
-check('插件拿到 kind=context', viaPlugin?.kind === 'context', JSON.stringify(viaPlugin?.error ?? viaPlugin?.kind))
-check('插件拿到 context_id', typeof viaPlugin?.context_id === 'string' && viaPlugin.context_id.startsWith('ctx_'))
-check('status 三段齐全',
-  typeof viaPlugin?.status?.retrieval === 'string'
-  && typeof viaPlugin?.status?.support === 'string'
-  && typeof viaPlugin?.status?.stage === 'string')
-check('support 与 degraded 是两件事',
-  typeof viaPlugin?.status?.degraded === 'boolean')
+  check('插件拿到 kind=context', viaPlugin?.kind === 'context', JSON.stringify(viaPlugin?.error ?? viaPlugin?.kind))
+  check('插件拿到 context_id', typeof viaPlugin?.context_id === 'string' && viaPlugin.context_id.startsWith('ctx_'))
+  check('status 三段齐全',
+    typeof viaPlugin?.status?.retrieval === 'string'
+    && typeof viaPlugin?.status?.support === 'string'
+    && typeof viaPlugin?.status?.stage === 'string')
+  check('support 与 degraded 是两件事',
+    typeof viaPlugin?.status?.degraded === 'boolean')
 
-const cliRun = spawnSync(PYTHON, [path.join(TOOLS, 'wiki_bridge.py'), 'context'], {
-  input: JSON.stringify({ query: QUERY, limit: 4, root: WIKI, plugin_version: PLUGIN_VERSION }),
-  encoding: 'utf8',
-  cwd: TOOLS,
-  env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
-  timeout: 180000,
-})
-
-let cliOut = null
-try {
-  cliOut = JSON.parse(String(cliRun.stdout || '').trim().split(/\r?\n/).pop())
-} catch {
-  cliOut = null
-}
-
-check('CLI 也拿到了 kind=context', cliOut?.kind === 'context', String(cliRun.stderr || '').slice(0, 300))
-
-const VOLATILE = new Set(['request_id', 'context_id', 'timing_ms', 'snapshot', 'observe_id'])
-function stable(value) {
-  if (Array.isArray(value)) return value.map(stable)
-  if (value && typeof value === 'object') {
-    const out = {}
-    for (const key of Object.keys(value).sort()) {
-      if (VOLATILE.has(key)) continue
-      out[key] = stable(value[key])
-    }
-    return out
-  }
-  return value
-}
-
-if (cliOut?.kind === 'context' && viaPlugin?.kind === 'context') {
-  const a = JSON.stringify(stable(viaPlugin))
-  const b = JSON.stringify(stable(cliOut))
-  check('插件结果与 CLI 逐字段一致', a === b,
-    a === b ? '' : `插件 ${a.length} 字节 / CLI ${b.length} 字节，首个差异位置 ${[...a].findIndex((c, i) => c !== b[i])}`)
-}
-
-// --- 4. verify：越界主张必须被抓住 ---------------------------------------
-const cid = viaPlugin?.context_id
-if (cid) {
-  const bad = await verifyTool.execute({ context_id: cid, answer: '重庆申论一共考五道题，180 分钟，作文 30 分。' })
-  const types = (bad?.violations ?? []).map((v) => v.type)
-  check('坏答案被核验出违规', (bad?.violations ?? []).length > 0, JSON.stringify(bad?.violations))
-  check('坏答案命中 unsupported_numeric_claim', types.includes('unsupported_numeric_claim'), String(types))
-  check('verify 返回 context_id 原值', bad?.context_id === cid)
-
-  const cliVerify = spawnSync(PYTHON, [path.join(TOOLS, 'wiki_bridge.py'), 'verify'], {
-    input: JSON.stringify({ context_id: cid, answer: '重庆申论一共考五道题，180 分钟，作文 30 分。', plugin_version: PLUGIN_VERSION }),
+  const cliRun = spawnSync(PYTHON, [path.join(TOOLS, 'wiki_bridge.py'), 'context'], {
+    input: JSON.stringify({ query: QUERY, limit: 4, root: WIKI, plugin_version: PLUGIN_VERSION }),
     encoding: 'utf8',
     cwd: TOOLS,
     env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
-    timeout: 120000,
+    timeout: 180000,
   })
-  let cliVerifyOut = null
-  try {
-    cliVerifyOut = JSON.parse(String(cliVerify.stdout || '').trim().split(/\r?\n/).pop())
-  } catch {
-    cliVerifyOut = null
-  }
-  check('verify 与 CLI 一致', JSON.stringify(stable(bad)) === JSON.stringify(stable(cliVerifyOut ?? {})),
-    `插件 ${JSON.stringify(stable(bad)).slice(0, 160)} / CLI ${JSON.stringify(stable(cliVerifyOut ?? {})).slice(0, 160)}`)
 
-  const expired = await verifyTool.execute({ context_id: 'ctx_0000000000000000', answer: 'x' })
-  check('不存在的快照 → context_missing',
-    expired?.status === 'context_missing' && expired?.error?.code === 'E_CONTEXT_NOT_FOUND',
-    JSON.stringify(expired?.status ?? expired?.error))
-  check('快照问题不等于回答错误', (expired?.violations ?? []).length === 0)
+  let cliOut = null
+  try {
+    cliOut = JSON.parse(String(cliRun.stdout || '').trim().split(/\r?\n/).pop())
+  } catch {
+    cliOut = null
+  }
+
+  check('CLI 也拿到了 kind=context', cliOut?.kind === 'context', String(cliRun.stderr || '').slice(0, 300))
+
+  const VOLATILE = new Set(['request_id', 'context_id', 'timing_ms', 'snapshot', 'observe_id'])
+  function stable(value) {
+    if (Array.isArray(value)) return value.map(stable)
+    if (value && typeof value === 'object') {
+      const out = {}
+      for (const key of Object.keys(value).sort()) {
+        if (VOLATILE.has(key)) continue
+        out[key] = stable(value[key])
+      }
+      return out
+    }
+    return value
+  }
+
+  if (cliOut?.kind === 'context' && viaPlugin?.kind === 'context') {
+    const a = JSON.stringify(stable(viaPlugin))
+    const b = JSON.stringify(stable(cliOut))
+    check('插件结果与 CLI 逐字段一致', a === b,
+      a === b ? '' : `插件 ${a.length} 字节 / CLI ${b.length} 字节，首个差异位置 ${[...a].findIndex((c, i) => c !== b[i])}`)
+  }
+
+  // --- 4. verify：越界主张必须被抓住 ---------------------------------------
+  const cid = viaPlugin?.context_id
+  if (cid) {
+    const bad = await verifyTool.execute({ context_id: cid, answer: '重庆申论一共考五道题，180 分钟，作文 30 分。' })
+    const types = (bad?.violations ?? []).map((v) => v.type)
+    check('坏答案被核验出违规', (bad?.violations ?? []).length > 0, JSON.stringify(bad?.violations))
+    check('坏答案命中 unsupported_numeric_claim', types.includes('unsupported_numeric_claim'), String(types))
+    check('verify 返回 context_id 原值', bad?.context_id === cid)
+
+    const cliVerify = spawnSync(PYTHON, [path.join(TOOLS, 'wiki_bridge.py'), 'verify'], {
+      input: JSON.stringify({ context_id: cid, answer: '重庆申论一共考五道题，180 分钟，作文 30 分。', plugin_version: PLUGIN_VERSION }),
+      encoding: 'utf8',
+      cwd: TOOLS,
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
+      timeout: 120000,
+    })
+    let cliVerifyOut = null
+    try {
+      cliVerifyOut = JSON.parse(String(cliVerify.stdout || '').trim().split(/\r?\n/).pop())
+    } catch {
+      cliVerifyOut = null
+    }
+    check('verify 与 CLI 一致', JSON.stringify(stable(bad)) === JSON.stringify(stable(cliVerifyOut ?? {})),
+      `插件 ${JSON.stringify(stable(bad)).slice(0, 160)} / CLI ${JSON.stringify(stable(cliVerifyOut ?? {})).slice(0, 160)}`)
+
+    const expired = await verifyTool.execute({ context_id: 'ctx_0000000000000000', answer: 'x' })
+    check('不存在的快照 → context_missing',
+      expired?.status === 'context_missing' && expired?.error?.code === 'E_CONTEXT_NOT_FOUND',
+      JSON.stringify(expired?.status ?? expired?.error))
+    check('快照问题不等于回答错误', (expired?.violations ?? []).length === 0)
+  }
+
+} else {
+  process.stdout.write('（WIKI_ROOT / WIKI_TOOLS 未设置：跳过真实 Python 通路的断言）\n')
 }
 
 // --- 5. 库没配：讲清是配置问题 -------------------------------------------

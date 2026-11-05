@@ -28,7 +28,7 @@
 ```json
 {"snapshot_version":"1","contract_version":"1.0","context_id":"ctx_…",
  "created_at":"…","expires_at":"…","ttl_seconds":1800,
- "query":"重庆 申论 考几道题","root":"D:\\笔记\\LLM-Wiki\\知识层-wiki",
+ "query":"重庆 申论 考几道题","root":"<你的库根目录>\\知识层-wiki",
  "payload_sha256":"…","pages":{"概念-concepts/重庆申论考情.md":"a1b2…"},
  "payload":{ /* 完整 context，原样 */ }}
 ```
