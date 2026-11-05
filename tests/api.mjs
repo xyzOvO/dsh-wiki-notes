@@ -14,6 +14,9 @@ import { EventEmitter } from 'node:events'
 
 const configFile = path.join(mkdtempSync(path.join(os.tmpdir(), 'wiki-notes-api-cfg-')), 'wiki-notes.config.json')
 process.env.DSH_WIKI_CONFIG = configFile
+// 账本也指到临时目录：测试不许往插件目录里写调用记录
+const callsProbe = path.join(path.dirname(configFile), 'calls.jsonl')
+process.env.DSH_WIKI_CALLS_LOG = callsProbe
 
 // 临时库：至少一页，否则 /save 的「先试扫再落盘」会拒绝保存
 const wiki = mkdtempSync(path.join(os.tmpdir(), 'wiki-notes-api-wiki-'))
@@ -190,6 +193,42 @@ check('/search 的 missedTerms 指出没用上的词',
   JSON.stringify(diag.json?.missedTerms) === JSON.stringify(['不存在的词']), JSON.stringify(diag.json?.missedTerms))
 check('/search 的 matchMode 与 degraded 一致',
   diag.json?.matchMode === (diag.json?.degraded === true ? 'or' : 'and'), String(diag.json?.matchMode))
+
+// 调用审计：面板手查要留痕，/calls 要读得回，清空与开关要走写闸
+const callsEmpty = await call('GET', '/calls')
+check('/calls 返回 rows 数组', Array.isArray(callsEmpty.json?.rows), JSON.stringify(callsEmpty.json)?.slice(0, 80))
+check('/calls 返回 totals.calls', typeof callsEmpty.json?.totals?.calls === 'number', JSON.stringify(callsEmpty.json?.totals))
+check('/calls 返回 enabled 布尔', callsEmpty.json?.enabled === true, String(callsEmpty.json?.enabled))
+
+// 上面那一串 /search 已经在记账了：面板手查的 source 必须是 panel
+const callsAfter = await call('GET', '/calls')
+const panelRows = (callsAfter.json?.rows ?? []).filter((row) => row.source === 'panel')
+check('面板手查留痕了', panelRows.length > 0, String(panelRows.length))
+check('记录里没有页面路径这类私货', (callsAfter.json?.rows ?? []).every((row) => row.file === undefined && row.text === undefined))
+
+const filtered = await call('GET', '/calls?only=miss')
+check('only=miss 只留零命中', (filtered.json?.rows ?? []).every((row) => row.hits === 0), JSON.stringify(filtered.json?.rows?.length))
+const limited = await call('GET', '/calls?limit=2')
+check('/calls?limit=2 最多两条', (limited.json?.rows ?? []).length <= 2, String(limited.json?.rows?.length))
+
+const offCalls = await call('POST', '/calls/config', JSON.stringify({ enabled: false }))
+check('/calls/config 关掉后回 enabled=false', offCalls.json?.enabled === false, JSON.stringify(offCalls.json))
+const afterOff = await call('GET', '/calls')
+check('关掉后 /calls 的 enabled 是 false', afterOff.json?.enabled === false, String(afterOff.json?.enabled))
+await call('POST', '/calls/config', JSON.stringify({ enabled: true }))
+
+const badCfg = await call('POST', '/calls/config', '{"enabled":')
+check('/calls/config 坏 JSON 回 400', badCfg.status === 400, String(badCfg.status))
+
+const clearedCalls = await call('POST', '/calls/clear')
+check('/calls/clear 回 200', clearedCalls.status === 200, String(clearedCalls.status))
+const afterClear = await call('GET', '/calls')
+check('清空后 rows 为空', (afterClear.json?.rows ?? []).length === 0, String(afterClear.json?.rows?.length))
+
+const crossClear = await call('POST', '/calls/clear', '', { origin: 'https://evil.example' })
+check('/calls/clear 拒绝跨源写入', crossClear.status === 403, String(crossClear.status))
+const crossCfg = await call('POST', '/calls/config', JSON.stringify({ enabled: false }), { origin: 'https://evil.example' })
+check('/calls/config 拒绝跨源写入', crossCfg.status === 403, String(crossCfg.status))
 
 rmSync(wiki, { recursive: true, force: true })
 if (existsSync(configFile)) rmSync(configFile, { force: true })
