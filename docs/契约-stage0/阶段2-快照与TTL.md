@@ -28,8 +28,8 @@
 ```json
 {"snapshot_version":"1","contract_version":"1.0","context_id":"ctx_…",
  "created_at":"…","expires_at":"…","ttl_seconds":1800,
- "query":"重庆 申论 考几道题","root":"<你的库根目录>\\知识层-wiki",
- "payload_sha256":"…","pages":{"概念-concepts/重庆申论考情.md":"a1b2…"},
+ "query":"星港 缓存策略 分几个片","root":"<你的库根目录>\\知识层-wiki",
+ "payload_sha256":"…","pages":{"概念-concepts/星港缓存配置基线.md":"a1b2…"},
  "payload":{ /* 完整 context，原样 */ }}
 ```
 
@@ -81,4 +81,4 @@
 
 ## 9 下一步（按用户定的顺序）
 
-F3 support_reason → 考试类型别名 → F5 子查询漂移。本轮未动其中任何一项。
+F3 support_reason → 口径别名 → F5 子查询漂移。本轮未动其中任何一项。

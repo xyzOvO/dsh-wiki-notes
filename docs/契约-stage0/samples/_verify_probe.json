@@ -29,7 +29,7 @@
       },
       {
         "rule": "provenance.fabricated_quote",
-        "quote": "申论五道题满分一百分必须全部答完"
+        "quote": "缓存策略五个分片必须覆盖全部请求"
       }
     ],
     "mapped": [

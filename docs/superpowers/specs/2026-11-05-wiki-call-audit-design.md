@@ -92,7 +92,7 @@ observe 取空。**截到 120 字**，超了加省略号。
 
 ```json
 {"ts":"2026-11-05T21:37:12","source":"model","tool":"wiki_recall",
- "mode":"search","query":"别了 司徒雷登","hits":0,"ms":1,"ok":true}
+ "mode":"search","query":"别了 旧索引","hits":0,"ms":1,"ok":true}
 ```
 
 **只有这 8 个字段。** 明确不写：页面路径、文件名、正文片段、答案、错误堆栈。

@@ -6,40 +6,40 @@
   "pipeline_version": "2026-11-05",
   "request_id": "req_SAMPLE0001",
   "context_id": "ctx_SAMPLE0001",
-  "query": "重庆 申论 考几道题",
+  "query": "星港 缓存策略 分几个片",
   "plan": {
-    "original_query": "重庆 申论 考几道题",
+    "original_query": "星港 缓存策略 分几个片",
     "query_units": [
       {
         "id": "Q0",
-        "query": "重庆 申论 考几道题",
+        "query": "星港 缓存策略 分几个片",
         "query_variant": "original",
         "slot": "numeric",
         "anchors": [
-          "重庆",
-          "申论"
+          "星港",
+          "缓存策略"
         ]
       },
       {
         "id": "Q1",
-        "query": "重庆 申论 考",
+        "query": "星港 缓存策略 分",
         "query_variant": "decomposed",
         "slot": "numeric",
         "parent": "Q0",
         "anchors": [
-          "重庆",
-          "申论"
+          "星港",
+          "缓存策略"
         ]
       }
     ],
     "anchors": [
       {
-        "text": "重庆",
+        "text": "星港",
         "kind": "region",
         "constraint": true
       },
       {
-        "text": "申论",
+        "text": "缓存策略",
         "kind": "subject",
         "constraint": false
       }
@@ -69,8 +69,8 @@
   },
   "evidence": [
     {
-      "page": "综合-syntheses/申论.md",
-      "title": "申论",
+      "page": "综合-syntheses/缓存策略.md",
+      "title": "缓存策略",
       "page_type": "综合",
       "status": "存疑",
       "sources": "13",
@@ -81,21 +81,21 @@
         "tier": 7,
         "fields": "标题+别名+标签+正文",
         "terms": [
-          "几道",
-          "申论",
-          "考几",
-          "考几道题",
-          "道题",
-          "重庆"
+          "几个",
+          "缓存策略",
+          "分片",
+          "分几个片",
+          "片数",
+          "星港"
         ],
         "missing_terms": [],
-        "matched_query": "重庆 申论 考几道题",
+        "matched_query": "星港 缓存策略 分几个片",
         "variant": "coverage"
       },
       "found_by": [
         {
           "query_id": "Q0",
-          "unit_query": "重庆 申论 考几道题",
+          "unit_query": "星港 缓存策略 分几个片",
           "unit_variant": "original",
           "engine": "search.py",
           "rank": 1,
@@ -103,7 +103,7 @@
         },
         {
           "query_id": "Q1",
-          "unit_query": "重庆 申论 考",
+          "unit_query": "星港 缓存策略 分",
           "unit_variant": "decomposed",
           "engine": "search.py",
           "rank": 1,
@@ -111,7 +111,7 @@
         },
         {
           "query_id": "Q0",
-          "unit_query": "重庆 申论 考几道题",
+          "unit_query": "星港 缓存策略 分几个片",
           "unit_variant": "original",
           "engine": "wiki_recall",
           "rank": 2,
@@ -119,7 +119,7 @@
         },
         {
           "query_id": "Q1",
-          "unit_query": "重庆 申论 考",
+          "unit_query": "星港 缓存策略 分",
           "unit_variant": "decomposed",
           "engine": "wiki_recall",
           "rank": 2,
@@ -159,9 +159,9 @@
           "support_confidence": "low",
           "needs_review": true,
           "note": "有条件支持：页面与该槽位只算相关、不是直接对应",
-          "section": "考什么",
-          "quote": "- **卷面（国考口径）**：180 分钟 5 题 = 4 道小题约 70 分 + 大作文 30 分；目标 70 分（小题得分率 80%、作文 70%）。**重庆省考是另一套规格**：4 题 / 150 分钟 / 作文…",
-          "page": "综合-syntheses/申论.md",
+          "section": "分片结构",
+          "quote": "- **配置规格（统一口径）**：180 秒 5 分片 = 4 道热分片约 70% + 冷分片 30%；目标 70%（热分片得分率 80%、冷数据 70%）。**星港区域口径是另一套规格**：4 分片 / 150 秒 / 冷数据…",
+          "page": "综合-syntheses/缓存策略.md",
           "relation": "related",
           "method": null,
           "values": null
@@ -169,8 +169,8 @@
       ]
     },
     {
-      "page": "概念-concepts/重庆申论考情.md",
-      "title": "重庆申论考情",
+      "page": "概念-concepts/星港缓存配置基线.md",
+      "title": "星港缓存配置基线",
       "page_type": "概念",
       "status": "演进中",
       "sources": "4",
@@ -181,21 +181,21 @@
         "tier": 7,
         "fields": "标题+别名+标签+正文",
         "terms": [
-          "几道",
-          "申论",
-          "考几",
-          "考几道题",
-          "道题",
-          "重庆"
+          "几个",
+          "缓存策略",
+          "分片",
+          "分几个片",
+          "片数",
+          "星港"
         ],
         "missing_terms": [],
-        "matched_query": "重庆 申论 考几道题",
+        "matched_query": "星港 缓存策略 分几个片",
         "variant": "coverage"
       },
       "found_by": [
         {
           "query_id": "Q0",
-          "unit_query": "重庆 申论 考几道题",
+          "unit_query": "星港 缓存策略 分几个片",
           "unit_variant": "original",
           "engine": "search.py",
           "rank": 3,
@@ -203,7 +203,7 @@
         },
         {
           "query_id": "Q1",
-          "unit_query": "重庆 申论 考",
+          "unit_query": "星港 缓存策略 分",
           "unit_variant": "decomposed",
           "engine": "search.py",
           "rank": 3,
@@ -211,7 +211,7 @@
         },
         {
           "query_id": "Q0",
-          "unit_query": "重庆 申论 考几道题",
+          "unit_query": "星港 缓存策略 分几个片",
           "unit_variant": "original",
           "engine": "wiki_recall",
           "rank": 1,
@@ -219,7 +219,7 @@
         },
         {
           "query_id": "Q1",
-          "unit_query": "重庆 申论 考",
+          "unit_query": "星港 缓存策略 分",
           "unit_variant": "decomposed",
           "engine": "wiki_recall",
           "rank": 1,
@@ -260,8 +260,8 @@
           "needs_review": true,
           "note": "有条件支持：页面与该槽位只算相关、不是直接对应",
           "section": "（开头）",
-          "quote": "> 定义：重庆市公务员考试（省考）申论科的卷面规格。**4 题 / 150 分钟 / 100 分**，分申论1（市级机关综合管理）、申论2（区县乡镇）、申论3（行政执法）三套卷，三卷题量结构一致，都是\"三小题 + 一篇…",
-          "page": "概念-concepts/重庆申论考情.md",
+          "quote": "> 定义：星港项目缓存策略的配置规格。**4 分片 / 150 秒 / 100% 覆盖率**，分环境1（生产·读写）、环境2（预发）、环境3（只读）三套环境，三套环境的分片结构一致，都是\"三热分片 + 一篇…",
+          "page": "概念-concepts/星港缓存配置基线.md",
           "relation": "related",
           "method": null,
           "values": null
@@ -273,8 +273,8 @@
           "needs_review": true,
           "note": "有条件支持：页面与该槽位只算相关、不是直接对应",
           "section": "历史沿革（旧口径警戒）",
-          "quote": "- 所以\"执法卷不考大作文\"是 2021–2022 年的旧口径。2026-02 仍有机考机构文章这样写（如\"上岸鸭\"《重庆省考申论题型及题量分布》），与真题不符。**取材优先 2023 年及以后**，2021–2022…",
-          "page": "概念-concepts/重庆申论考情.md",
+          "quote": "- 所以\"只读环境不放冷数据\"是 2021–2022 年的旧口径。2026-02 仍有技术博客文章这样写（如\"某技术博客\"《星港缓存分片与命中分布》），与基准记录不符。**取材优先 2023 年及以后**，2021–2022…",
+          "page": "概念-concepts/星港缓存配置基线.md",
           "relation": "related",
           "method": null,
           "values": null
@@ -282,8 +282,8 @@
       ]
     },
     {
-      "page": "对比-comparisons/行政执法卷与综合管理卷对比.md",
-      "title": "行政执法卷与综合管理卷对比",
+      "page": "对比-comparisons/只读分片与读写分片对比.md",
+      "title": "只读分片与读写分片对比",
       "page_type": "对比",
       "status": "演进中",
       "sources": "3",
@@ -294,21 +294,21 @@
         "tier": 7,
         "fields": "别名+标签+正文",
         "terms": [
-          "几道",
-          "申论",
-          "考几",
-          "考几道题",
-          "道题",
-          "重庆"
+          "几个",
+          "缓存策略",
+          "分片",
+          "分几个片",
+          "片数",
+          "星港"
         ],
         "missing_terms": [],
-        "matched_query": "重庆 申论 考几道题",
+        "matched_query": "星港 缓存策略 分几个片",
         "variant": "coverage"
       },
       "found_by": [
         {
           "query_id": "Q0",
-          "unit_query": "重庆 申论 考几道题",
+          "unit_query": "星港 缓存策略 分几个片",
           "unit_variant": "original",
           "engine": "search.py",
           "rank": 5,
@@ -316,7 +316,7 @@
         },
         {
           "query_id": "Q1",
-          "unit_query": "重庆 申论 考",
+          "unit_query": "星港 缓存策略 分",
           "unit_variant": "decomposed",
           "engine": "search.py",
           "rank": 5,
@@ -324,7 +324,7 @@
         },
         {
           "query_id": "Q0",
-          "unit_query": "重庆 申论 考几道题",
+          "unit_query": "星港 缓存策略 分几个片",
           "unit_variant": "original",
           "engine": "wiki_recall",
           "rank": 5,
@@ -332,7 +332,7 @@
         },
         {
           "query_id": "Q1",
-          "unit_query": "重庆 申论 考",
+          "unit_query": "星港 缓存策略 分",
           "unit_variant": "decomposed",
           "engine": "wiki_recall",
           "rank": 4,
@@ -368,8 +368,8 @@
       "supports": []
     },
     {
-      "page": "资料-sources/申论·资料摘要.md",
-      "title": "申论·资料摘要",
+      "page": "资料-sources/缓存策略·资料摘要.md",
+      "title": "缓存策略·资料摘要",
       "page_type": "资料",
       "status": "演进中",
       "sources": "10",
@@ -380,21 +380,21 @@
         "tier": 7,
         "fields": "标题+别名+标签+正文",
         "terms": [
-          "几道",
-          "申论",
-          "考几",
-          "考几道题",
-          "道题",
-          "重庆"
+          "几个",
+          "缓存策略",
+          "分片",
+          "分几个片",
+          "片数",
+          "星港"
         ],
         "missing_terms": [],
-        "matched_query": "重庆 申论 考几道题",
+        "matched_query": "星港 缓存策略 分几个片",
         "variant": "coverage"
       },
       "found_by": [
         {
           "query_id": "Q0",
-          "unit_query": "重庆 申论 考几道题",
+          "unit_query": "星港 缓存策略 分几个片",
           "unit_variant": "original",
           "engine": "search.py",
           "rank": 2,
@@ -402,7 +402,7 @@
         },
         {
           "query_id": "Q1",
-          "unit_query": "重庆 申论 考",
+          "unit_query": "星港 缓存策略 分",
           "unit_variant": "decomposed",
           "engine": "search.py",
           "rank": 2,
@@ -410,7 +410,7 @@
         },
         {
           "query_id": "Q0",
-          "unit_query": "重庆 申论 考几道题",
+          "unit_query": "星港 缓存策略 分几个片",
           "unit_variant": "original",
           "engine": "wiki_recall",
           "rank": 3,
@@ -418,7 +418,7 @@
         },
         {
           "query_id": "Q1",
-          "unit_query": "重庆 申论 考",
+          "unit_query": "星港 缓存策略 分",
           "unit_variant": "decomposed",
           "engine": "wiki_recall",
           "rank": 3,
@@ -459,8 +459,8 @@
           "needs_review": true,
           "note": null,
           "section": "元信息",
-          "quote": "- **卷面（国考口径，勿套省考）**：180 分钟 5 题（4 小题约 70 分 + 作文 30 分）/ 目标 70 分（小题 80%、作文 70%）；重庆省考是 4 题 / 150 分钟 / 作文 40 分，见 […",
-          "page": "资料-sources/申论·资料摘要.md",
+          "quote": "- **配置规格（统一口径，勿套区域口径）**：180 秒 5 分片（4 热分片约 70% + 冷数据 30%）/ 目标 70%（热分片 80%、冷数据 70%）；星港区域口径是 4 分片 / 150 秒 / 冷数据 40%，见 […",
+          "page": "资料-sources/缓存策略·资料摘要.md",
           "relation": "clue",
           "method": null,
           "values": null
@@ -472,25 +472,25 @@
     {
       "evidence_id": "E001",
       "slot": "numeric",
-      "quote": "- **卷面（国考口径）**：180 分钟 5 题 = 4 道小题约 70 分 + 大作文 30 分；目标 70 分（小题得分率 80%、作文 70%）。**重庆省考是另一套规格**：4 题 / 150 分钟 / 作文…",
+      "quote": "- **配置规格（统一口径）**：180 秒 5 分片 = 4 道热分片约 70% + 冷分片 30%；目标 70%（热分片得分率 80%、冷数据 70%）。**星港区域口径是另一套规格**：4 分片 / 150 秒 / 冷数据…",
       "page_count": 1,
       "engine_count": 2,
       "provenance": [
         {
-          "page": "综合-syntheses/申论.md",
-          "section": "考什么"
+          "page": "综合-syntheses/缓存策略.md",
+          "section": "分片结构"
         }
       ]
     },
     {
       "evidence_id": "E002",
       "slot": "numeric",
-      "quote": "> 定义：重庆市公务员考试（省考）申论科的卷面规格。**4 题 / 150 分钟 / 100 分**，分申论1（市级机关综合管理）、申论2（区县乡镇）、申论3（行政执法）三套卷，三卷题量结构一致，都是\"三小题 + 一篇…",
+      "quote": "> 定义：星港项目缓存策略的配置规格。**4 分片 / 150 秒 / 100% 覆盖率**，分环境1（生产·读写）、环境2（预发）、环境3（只读）三套环境，三套环境的分片结构一致，都是\"三热分片 + 一篇…",
       "page_count": 1,
       "engine_count": 2,
       "provenance": [
         {
-          "page": "概念-concepts/重庆申论考情.md",
+          "page": "概念-concepts/星港缓存配置基线.md",
           "section": "（开头）"
         }
       ]
@@ -498,12 +498,12 @@
     {
       "evidence_id": "E003",
       "slot": "numeric",
-      "quote": "- 所以\"执法卷不考大作文\"是 2021–2022 年的旧口径。2026-02 仍有机考机构文章这样写（如\"上岸鸭\"《重庆省考申论题型及题量分布》），与真题不符。**取材优先 2023 年及以后**，2021–2022…",
+      "quote": "- 所以\"只读环境不放冷数据\"是 2021–2022 年的旧口径。2026-02 仍有技术博客文章这样写（如\"某技术博客\"《星港缓存分片与命中分布》），与基准记录不符。**取材优先 2023 年及以后**，2021–2022…",
       "page_count": 1,
       "engine_count": 2,
       "provenance": [
         {
-          "page": "概念-concepts/重庆申论考情.md",
+          "page": "概念-concepts/星港缓存配置基线.md",
           "section": "历史沿革（旧口径警戒）"
         }
       ]
@@ -511,12 +511,12 @@
     {
       "evidence_id": "E004",
       "slot": "numeric",
-      "quote": "1. [2025 重庆申论一卷真题](https://www.aipta.com/article/10282.html) — 3 道概括/分析题 + 作文\"聚·变\"。",
+      "quote": "1. [2025 星港缓存基准记录](https://example.invalid/notes/10282) — 3 项概括/分析 + 冷数据\"聚·变\"。",
       "page_count": 1,
       "engine_count": 2,
       "provenance": [
         {
-          "page": "概念-concepts/重庆申论考情.md",
+          "page": "概念-concepts/星港缓存配置基线.md",
           "section": "依据"
         }
       ]

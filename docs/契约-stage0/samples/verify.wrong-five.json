@@ -12,25 +12,25 @@
    "type": "unsupported_numeric_claim",
    "rule": "numeric.claim_not_supported",
    "status": "contradicted",
-   "claim": "五道题",
-   "reason": "同指标同范围（重庆·省考）证据是 4 题，答复写的是 五道题",
-   "page": "综合-syntheses/申论.md"
+   "claim": "五个分片",
+   "reason": "同指标同范围（星港·区域口径）证据是 4 分片，答复写的是 五个分片",
+   "page": "综合-syntheses/缓存策略.md"
   },
   {
    "type": "unsupported_numeric_claim",
    "rule": "numeric.claim_not_supported",
    "status": "contradicted",
-   "claim": "180 分钟",
-   "reason": "同指标同范围（重庆·省考）证据是 150 分钟，答复写的是 180 分钟",
-   "page": "综合-syntheses/申论.md"
+   "claim": "180 秒",
+   "reason": "同指标同范围（星港·区域口径）证据是 150 秒，答复写的是 180 秒",
+   "page": "综合-syntheses/缓存策略.md"
   },
   {
    "type": "unsupported_numeric_claim",
    "rule": "numeric.claim_unverifiable",
    "status": "unverifiable",
-   "claim": "30 分",
-   "reason": "证据与主张的适用范围有一侧未标注，不能视为匹配（证据：全国·国考）（答复未标复核）",
-   "page": "综合-syntheses/申论.md"
+   "claim": "30%",
+   "reason": "证据与主张的适用范围有一侧未标注，不能视为匹配（证据：统一·统一口径）（答复未标复核）",
+   "page": "综合-syntheses/缓存策略.md"
   }
  ],
  "checked_rules": 10,

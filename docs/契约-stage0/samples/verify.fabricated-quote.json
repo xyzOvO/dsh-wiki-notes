@@ -16,9 +16,9 @@
    "type": "unsupported_numeric_claim",
    "rule": "numeric.claim_not_supported",
    "status": "contradicted",
-   "claim": "五道题",
-   "reason": "同指标同范围（重庆·省考）证据是 4 题，答复写的是 五道题",
-   "page": "综合-syntheses/申论.md"
+   "claim": "五个分片",
+   "reason": "同指标同范围（星港·区域口径）证据是 4 分片，答复写的是 五个分片",
+   "page": "综合-syntheses/缓存策略.md"
   }
  ],
  "checked_rules": 10,

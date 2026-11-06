@@ -7,7 +7,11 @@
  *      不能伪装成「知识库里没有」；
  *   3. 同一个输入，插件拿到的东西和直接用 Python CLI 拿到的东西逐字段一致
  *      （排除 request_id / context_id / timing 这类每次都变的东西）；
- *   4. verify 会真的把「重庆申论 5 道题」这种越界主张抓出来。
+ *   4. verify 会真的把「星港缓存策略 5 个分片」这种越界主张抓出来。
+ *
+ * 隐私口径：仓库里的查询词与答案一律用虚构的「星港缓存」样例，不写真实笔记主题。
+ * 本机要跑真实管线的真通路断言时，用 WIKI_TEST_QUERY / WIKI_TEST_BAD_ANSWER
+ * 两个环境变量覆盖（只进内存，不进仓库；CI 没给 Python 管线时这段本来就跳过）。
  */
 
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs'
@@ -33,6 +37,10 @@ const PLUGIN_VERSION = JSON.parse(readFileSync(path.join(PLUGIN_ROOT, 'package.j
 // 观察日志单独落一份到临时目录：观察闭环的断言要读它，
 // 也不能把测试记录写进正式使用的日志里（那会把修正率带歪）。
 const OBSERVE_LOG = path.join(tmp, 'observe.jsonl')
+// 真通路断言的样例：默认全是虚构内容（星港缓存），绝不带真实笔记主题进仓库。
+// 本机想拿自己那套库验证时，用环境变量覆盖，值只活在进程里。
+const TEST_QUERY = process.env.WIKI_TEST_QUERY || '星港 缓存策略 分几个片'
+const TEST_BAD_ANSWER = process.env.WIKI_TEST_BAD_ANSWER || '星港缓存策略一共分五个分片，180 秒，冷数据 30%。'
 
 // 起始配置：有库、没 bridge。先测「没配工具目录」这一路。
 writeFileSync(configFile, JSON.stringify({ root: WIKI }, null, 2), 'utf8')
@@ -85,14 +93,14 @@ const noCid = await verifyTool.execute({ context_id: '', answer: 'x' })
 check('缺 context_id → E_CONTEXT_NOT_FOUND', noCid?.error?.code === 'E_CONTEXT_NOT_FOUND')
 
 // --- 2. 通路故障：不能伪装成「库里没有」 ---------------------------------
-const noTools = await contextTool.execute({ query: '申论' })
+const noTools = await contextTool.execute({ query: '缓存策略' })
 check('没配 toolsRoot → E_PYTHON_UNAVAILABLE',
   noTools?.error?.code === 'E_PYTHON_UNAVAILABLE', JSON.stringify(noTools?.error))
 check('故障结果里没有 support 字段（不许伪装知识不足）',
   noTools?.status === undefined && noTools?.evidence === undefined)
 
 writeConfig({ bridge: { python: 'no-such-python-xyz', toolsRoot: TOOLS, timeoutMs: 15000 } })
-const badPython = await contextTool.execute({ query: '申论' })
+const badPython = await contextTool.execute({ query: '缓存策略' })
 check('python 不存在 → E_PYTHON_UNAVAILABLE',
   badPython?.error?.code === 'E_PYTHON_UNAVAILABLE', JSON.stringify(badPython?.error))
 
@@ -102,7 +110,7 @@ if (HAS_PIPELINE) {
   // --- 3. 真跑：插件 vs CLI 逐字段一致 -------------------------------------
   writeConfig({ bridge: { python: PYTHON, toolsRoot: TOOLS, timeoutMs: 180000, ttlSeconds: 1800, observeLog: OBSERVE_LOG } })
 
-  const QUERY = '重庆 申论 考几道题'
+  const QUERY = TEST_QUERY
   const viaPlugin = await contextTool.execute({ query: QUERY, limit: 4 })
 
   check('插件拿到 kind=context', viaPlugin?.kind === 'context', JSON.stringify(viaPlugin?.error ?? viaPlugin?.kind))
@@ -155,14 +163,14 @@ if (HAS_PIPELINE) {
   // --- 4. verify：越界主张必须被抓住 ---------------------------------------
   const cid = viaPlugin?.context_id
   if (cid) {
-    const bad = await verifyTool.execute({ context_id: cid, answer: '重庆申论一共考五道题，180 分钟，作文 30 分。' })
+    const bad = await verifyTool.execute({ context_id: cid, answer: TEST_BAD_ANSWER })
     const types = (bad?.violations ?? []).map((v) => v.type)
     check('坏答案被核验出违规', (bad?.violations ?? []).length > 0, JSON.stringify(bad?.violations))
     check('坏答案命中 unsupported_numeric_claim', types.includes('unsupported_numeric_claim'), String(types))
     check('verify 返回 context_id 原值', bad?.context_id === cid)
 
     const cliVerify = spawnSync(PYTHON, [path.join(TOOLS, 'wiki_bridge.py'), 'verify'], {
-      input: JSON.stringify({ context_id: cid, answer: '重庆申论一共考五道题，180 分钟，作文 30 分。', plugin_version: PLUGIN_VERSION }),
+      input: JSON.stringify({ context_id: cid, answer: TEST_BAD_ANSWER, plugin_version: PLUGIN_VERSION }),
       encoding: 'utf8',
       cwd: TOOLS,
       env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
@@ -245,7 +253,7 @@ const childCode = [
   "  tools: { register: (d) => { registered.set(d.name, d); return () => {} } } }",
   "const mod = await import(process.argv[1])",
   "mod.apply(ctx, {})",
-  "const out = await registered.get('wiki_context').execute({ query: '申论' })",
+  "const out = await registered.get('wiki_context').execute({ query: '缓存策略' })",
   "process.stdout.write(JSON.stringify(out))",
 ].join(String.fromCharCode(10))
 

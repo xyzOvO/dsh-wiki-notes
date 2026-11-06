@@ -48,7 +48,7 @@
 ### 配套产物
 
 - **[knowledge-gateway.v1.schema.json](契约-stage0/knowledge-gateway.v1.schema.json)** —— 契约的机器可读定义（28 KB），`context` / `verify` / `observe_stats` 三种输出的完整字段。
-- **[samples/](契约-stage0/samples/)** —— 8 份真实样例：`context.cq-shenlun.json`（一份完整的 context）、6 份 verify 场景（答对但有缺口 / 编引文 / 范围错 / 数字错 / 快照过期 / 快照损坏）、`_verify_probe.json`。
+- **[samples/](契约-stage0/samples/)** —— 8 份虚构样例：`context.sample-cache.json`（一份完整的 context）、6 份 verify 场景（答对但有缺口 / 编引文 / 范围错 / 数字错 / 快照过期 / 快照损坏）、`_verify_probe.json`。
   改判据前，先拿样例跑一遍 `wiki_verify` 看行为有没有变。
 
 ---

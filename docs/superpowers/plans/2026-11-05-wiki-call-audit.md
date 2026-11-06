@@ -69,7 +69,7 @@ const file = path.join(tmp, 'calls.jsonl')
 {
   const entry = normalizeEntry({
     ts: '2026-11-05T21:00:00', source: 'model', tool: 'wiki_recall', mode: 'search',
-    query: '别了 司徒雷登', hits: 0, ms: 1, ok: true,
+    query: '别了 旧索引', hits: 0, ms: 1, ok: true,
     file: '/wiki/某页.md', text: '正文片段',
   })
   assert.deepEqual(Object.keys(entry).sort(), [...CALL_FIELDS].sort())

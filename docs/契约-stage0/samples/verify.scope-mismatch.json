@@ -12,9 +12,9 @@
    "type": "unsupported_numeric_claim",
    "rule": "numeric.claim_unverifiable",
    "status": "unverifiable",
-   "claim": "6 道题",
-   "reason": "答复限定了6 道题 的年份口径，证据只写「重庆·省考」，不能据此判定对错，需复核（答复未标复核）",
-   "page": "综合-syntheses/申论.md"
+   "claim": "6 个分片",
+   "reason": "答复限定了6 个分片 的年份口径，证据只写「星港·区域口径」，不能据此判定对错，需复核（答复未标复核）",
+   "page": "综合-syntheses/缓存策略.md"
   }
  ],
  "checked_rules": 10,
