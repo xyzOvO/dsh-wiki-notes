@@ -24,7 +24,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "wiki-notes": "./bin/cli.mjs"
+    "wiki-notes": "bin/cli.mjs"
   },
   "files": [
     "lib",
