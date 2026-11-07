@@ -11,8 +11,11 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { RULE_FAMILIES } from '../lib/governance.js'
+import { isObserveResult } from '../lib/bridge.js'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
@@ -121,6 +124,70 @@ ok('启动时就探一次库（冷扫描不落在用户第一句话上）', () =
   const text = readFileSync(path.join(ROOT, 'lib/index.js'), 'utf8')
   if (!text.includes('启动时探一次库')) throw new Error('找不到启动预热的注释')
   if (!text.includes('首次扫描')) throw new Error('预热日志没带耗时')
+})
+
+// ---- 治理四层触发 / 冻结契约只读门禁 ----
+// 只读断言：CI 不跑 Python，也不宣称「证明 Python 有对应规则」；
+// 人工对照冻结版 answer_policy.py / wiki_bridge.py 是实施前的另一道门禁。
+ok('四个工具 description 都有硬触发，且 wiki_recall 引用同一份 DESCRIPTION', () => {
+  const source = readFileSync(path.join(ROOT, 'lib/index.js'), 'utf8')
+  const hard = /(必须|不得|先[^。]*再)/
+  const constants = ['RECALL_TRIGGERS', 'CONTEXT_TRIGGERS', 'VERIFY_TRIGGERS', 'OBSERVE_TRIGGERS']
+  for (const name of constants) {
+    const match = source.match(new RegExp(`const ${name}\\s*=\\s*'([^']*)'`))
+    if (!match) throw new Error(`找不到常量 ${name}`)
+    if (!hard.test(match[1])) throw new Error(`${name} 没有「必须 / 不得 / 先…再…」硬触发`)
+    if (!source.includes('${' + name + '}') && !source.includes('+ ' + name + ',')) {
+      throw new Error(`${name} 没被任何工具 description 引用`)
+    }
+  }
+  if (!source.includes('description: DESCRIPTION')) throw new Error('wiki_recall 没引用 DESCRIPTION')
+})
+
+ok('RULE_FAMILIES 是冻结契约 violation.type.enum 的子集', () => {
+  const schemaPath = path.join(ROOT, 'docs/契约-stage0/knowledge-gateway.v1.schema.json')
+  const schema = JSON.parse(readFileSync(schemaPath, 'utf8'))
+  const allowed = schema?.$defs?.violation?.properties?.type?.enum
+  if (!Array.isArray(allowed)) throw new Error('冻结契约里找不到 violation.type.enum')
+  const extra = RULE_FAMILIES.filter((name) => !allowed.includes(name))
+  if (extra.length > 0) throw new Error(`不在冻结契约里的规则族：${extra.join(', ')}`)
+})
+
+ok('冻结契约 knowledge-gateway.v1.schema.json 逐字节未变', () => {
+  const bytes = readFileSync(path.join(ROOT, 'docs/契约-stage0/knowledge-gateway.v1.schema.json'))
+  const digest = createHash('sha256').update(bytes).digest('hex').toUpperCase()
+  if (digest !== 'AD12FA65699A9CB7E0F3EACB025A8370BAE0142CBC474834FA87237A42B860EE') {
+    throw new Error(`冻结契约哈希变了：${digest}`)
+  }
+})
+
+// 冻结契约把两类 observe 形状分得很清：'observe' 是 observe_log.jsonl 里
+// 单条日志事件的 kind，'observe_stats' 才是 wiki_observe 命令的成功统计返回。
+// 早期 guard 把两者混了，governance 会静默不合并；这条只读门禁钉住语义。
+ok('冻结契约区分 observe 日志事件与 observe_stats 命令返回', () => {
+  const schemaPath = path.join(ROOT, 'docs/契约-stage0/knowledge-gateway.v1.schema.json')
+  const schema = JSON.parse(readFileSync(schemaPath, 'utf8'))
+  const logEventKind = schema?.$defs?.observe?.properties?.kind?.const
+  const statsKind = schema?.$defs?.observe_stats?.properties?.kind?.const
+  const statsRequired = schema?.$defs?.observe_stats?.required
+  if (logEventKind !== 'observe') throw new Error(`日志事件 kind 不是 observe：${logEventKind}`)
+  if (statsKind !== 'observe_stats') throw new Error(`命令返回 kind 不是 observe_stats：${statsKind}`)
+  if (!Array.isArray(statsRequired) || !statsRequired.includes('totals') || !statsRequired.includes('window')) {
+    throw new Error(`observe_stats 缺 totals/window 约束：${JSON.stringify(statsRequired)}`)
+  }
+  const source = readFileSync(path.join(ROOT, 'lib/index.js'), 'utf8')
+  if (!source.includes('isObserveResult(base)')) {
+    throw new Error('wiki_observe 的 guard 没复用冻结契约成功返回判定')
+  }
+})
+
+ok('isObserveResult 只认冻结契约的成功返回，不认日志事件或错误信封', () => {
+  if (!isObserveResult({ kind: 'observe_stats', totals: {}, window: {} })) {
+    throw new Error('observe_stats 被误判为失败')
+  }
+  if (isObserveResult({ kind: 'observe' })) throw new Error('observe 日志事件被误判为成功统计')
+  if (isObserveResult({ kind: 'error' })) throw new Error('error 信封被误判为成功统计')
+  if (isObserveResult(null)) throw new Error('null 被误判为成功统计')
 })
 
 if (failed > 0) {

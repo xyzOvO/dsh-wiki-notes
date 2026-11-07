@@ -29,5 +29,8 @@ lint-history.json
 # 调用账本：机器本地产物，记的是这台机器上的调用
 calls.jsonl
 
+# 治理观察事件账本：机器本地产物，和 calls.jsonl 一样不进发布包
+governance.jsonl
+
 # tools/preview.mjs 的产物：静态预览页与截图
 preview/

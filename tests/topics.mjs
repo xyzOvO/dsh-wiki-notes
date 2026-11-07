@@ -16,10 +16,17 @@ process.env.DSH_WIKI_CONFIG = path.join(mkdtempSync(path.join(tmpdir(), 'wiki-no
 
 const SAMPLE = fileURLToPath(new URL('../examples/sample-wiki/', import.meta.url))
 let failed = 0
+let total = 0
 function check(name, ok, detail = '') {
+  total += 1
   if (ok) return
   failed += 1
   process.stderr.write(`  ✗ ${name}${detail ? ` — ${detail}` : ''}\n`)
+}
+
+/** 治理总纲是第二段；主题词测试一律按名字取，别被注册顺序绑死。 */
+function sectionOf(state, name) {
+  return state.sections.find((item) => item?.name === name)
 }
 
 function makeCtx() {
@@ -41,8 +48,11 @@ function makeCtx() {
   apply(ctx, { root: SAMPLE })
   await state.definition.execute({ mode: 'list', limit: 1 }, {})
 
-  check('注册了一个 context 段', state.sections.length === 1, `实际 ${state.sections.length}`)
-  const section = state.sections[0]
+  check('注册了 topics 与 governance 两段',
+    state.sections.length === 2 && state.sections[0]?.name === 'wiki-notes:topics'
+      && state.sections[1]?.name === 'wiki-notes:governance',
+    state.sections.map((item) => item?.name).join(','))
+  const section = sectionOf(state, 'wiki-notes:topics')
   check('段名固定', section?.name === 'wiki-notes:topics', String(section?.name))
   const text = typeof section?.text === 'function' ? section.text() : ''
   check('格式对：本地知识库主题：…（不带页数，页数变动不该打掉前缀缓存）', /^本地知识库主题：/.test(text), text)
@@ -54,13 +64,20 @@ function makeCtx() {
   // 同一份输入两次求值必须逐字节相同：这段每回合都在上下文里，
   // 只要上次和这次不一样就打掉一次前缀缓存，而它的内容其实没变
   check('同输入两次求值逐字节相同', section.text() === section.text(), '两次结果不同')
+  const gov = sectionOf(state, 'wiki-notes:governance')
+  check('治理总纲 order 为 241 且不插值', gov?.order === 241 && gov?.interpolate === false, JSON.stringify({ order: gov?.order, interpolate: gov?.interpolate }))
+  const govText = typeof gov?.text === 'function' ? gov.text() : ''
+  check('治理总纲要求输出最终答案之前必须核验', govText.includes('输出最终答案之前必须用 wiki_verify'), govText.slice(0, 80))
+  check('治理总纲禁止绕过 violations_found', govText.includes('不得绕过 violations_found'), govText.slice(0, 80))
+  check('治理总纲覆盖 partial / insufficient', govText.includes('partial / insufficient') && govText.includes('必须走 wiki_verify'), govText.slice(0, 80))
+  check('治理总纲是稳定文本，两次求值相同', gov.text() === gov.text(), '两次结果不同')
 }
 
 // 2. 没配库：必须是空串，不能每回合白占上下文
 {
   const { ctx, state } = makeCtx()
   apply(ctx, { root: '' })
-  const section = state.sections[0]
+  const section = sectionOf(state, 'wiki-notes:topics')
   const text = typeof section?.text === 'function' ? section.text() : 'x'
   check('没配库时为空串', text === '', text)
 }
@@ -69,7 +86,7 @@ function makeCtx() {
 {
   const { ctx, state } = makeCtx()
   apply(ctx, { root: SAMPLE, prompt: { enabled: false } })
-  const text = state.sections[0].text()
+  const text = sectionOf(state, 'wiki-notes:topics').text()
   check('关掉后为空串', text === '', text)
 }
 
@@ -77,7 +94,7 @@ function makeCtx() {
 {
   const { ctx, state } = makeCtx()
   apply(ctx, { root: SAMPLE, prompt: { enabled: true, override: '要查库。' } })
-  check('override 原样生效', state.sections[0].text() === '要查库。', state.sections[0].text())
+  check('override 原样生效', sectionOf(state, 'wiki-notes:topics').text() === '要查库。', sectionOf(state, 'wiki-notes:topics').text())
 }
 
 // 2d. 追加一句（extra 接在自动内容后面）
@@ -85,7 +102,7 @@ function makeCtx() {
   const { ctx, state } = makeCtx()
   apply(ctx, { root: SAMPLE, prompt: { enabled: true, extra: '不确定时先查库。' } })
   await state.definition.execute({ mode: 'list', limit: 1 }, {})
-  const text = state.sections[0].text()
+  const text = sectionOf(state, 'wiki-notes:topics').text()
   check('extra 追加在末尾', text.includes('主题：') && text.endsWith('\n不确定时先查库。'), JSON.stringify(text))
 }
 
@@ -117,7 +134,7 @@ function makeCtx() {
   const { ctx, state } = makeCtx()
   apply(ctx, { root: SAMPLE, topics: { minCount: 2 } })
   await state.definition.execute({ mode: 'list', limit: 1 }, {})
-  const line = state.sections[0].text()
+  const line = sectionOf(state, 'wiki-notes:topics').text()
   check('阈值 2：出现一次的标签不进主题词', !line.includes('训练') && !line.includes('检索'), line)
   check('阈值 2：AI 还在（×5）', line.includes('AI'), line)
 }
@@ -126,7 +143,7 @@ function makeCtx() {
   const { ctx, state } = makeCtx()
   apply(ctx, { root: SAMPLE, topics: { minCount: 1 } })
   await state.definition.execute({ mode: 'list', limit: 1 }, {})
-  const line = state.sections[0].text()
+  const line = sectionOf(state, 'wiki-notes:topics').text()
   check('minCount:1 时一次性标签也参与排名', line.includes('训练') || line.includes('检索'), line)
 }
 
@@ -148,7 +165,7 @@ function makeCtx() {
   ctx.webServer = { register: (route) => { state.route = route; return () => {} } }
   apply(ctx, { root: wiki, topics: { minCount: 2 } })
   await state.definition.execute({ mode: 'list', limit: 1 }, {})
-  const line = state.sections[0].text()
+  const line = sectionOf(state, 'wiki-notes:topics').text()
   check('大小写不同的同一个主题只出现一次', !(line.includes('RAG') && line.includes('rag')), line)
 
   let payload = ''
@@ -194,6 +211,6 @@ if (failed > 0) {
   process.stderr.write(`topics smoke 失败 ${failed} 项\n`)
   process.exit(1)
 }
-console.log('topics smoke 全部通过（16 项）')
+console.log(`topics smoke 全部通过（${total} 项）`)
 // 测试里 apply 会建目录监听；临时库删掉后监听可能残留，显式收尾更稳
 process.exit(0)

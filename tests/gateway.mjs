@@ -23,6 +23,8 @@ import { pathToFileURL, fileURLToPath } from 'node:url'
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'wiki-notes-gateway-'))
 const configFile = path.join(tmp, 'wiki-notes.config.json')
 process.env.DSH_WIKI_CONFIG = configFile
+// 治理观察账本也落到临时目录：真通路会写 verify 事件，不能污染插件目录
+process.env.DSH_WIKI_GOVERNANCE_LOG = path.join(tmp, 'governance.jsonl')
 
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 // 库路径与工具目录不写死本机绝对路径（写死了会跟着仓库公开出去）：
@@ -237,6 +239,28 @@ if (HAS_PIPELINE) {
       explicitRecord?.parent_observe_id === explicitObs,
       `parent_observe_id=${JSON.stringify(explicitRecord?.parent_observe_id)}`)
   }
+
+  // --- 4c. wiki_observe 成功返回必须合并插件侧 governance -------------------
+  // 冻结契约里 observe 命令的成功统计返回 kind:'observe_stats'；'observe' 是
+  // observe_log.jsonl 里单条日志事件的 kind。早期 guard 写成 !== 'observe'，
+  // 把两者混了，governance 会静默不合并 —— 这条真通路断言就是它的回归门禁。
+  const observeTool = registered.get('wiki_observe')
+  const observeValue = await observeTool.execute({ days: 7, limit: 10 })
+  check('observe 成功返回 kind=observe_stats',
+    observeValue?.kind === 'observe_stats', JSON.stringify(observeValue?.kind ?? observeValue?.error))
+  check('observe 成功返回合并了 governance（插件侧账本）',
+    observeValue?.governance && typeof observeValue.governance === 'object'
+      && observeValue.governance.state === 'ok',
+    JSON.stringify(Object.keys(observeValue ?? {})))
+  check('observe.governance 带三项现行指标',
+    typeof observeValue?.governance?.metrics?.required_check_verification_trigger_rate === 'object'
+      && typeof observeValue?.governance?.metrics?.effective_verify_violation_discovery_rate === 'object'
+      && typeof observeValue?.governance?.metrics?.observation_coverage === 'object',
+    JSON.stringify(Object.keys(observeValue?.governance?.metrics ?? {})))
+  const observeRendered = observeTool.output.render({ days: 7, limit: 10 }, observeValue)
+  check('renderObserve 输出治理观察段',
+    String(observeRendered?.[0]?.text ?? '').includes('治理观察（插件侧账本'),
+    String(observeRendered?.[0]?.text ?? '').slice(-200))
 
 } else {
   process.stdout.write('（WIKI_ROOT / WIKI_TOOLS 未设置：跳过真实 Python 通路的断言）\n')

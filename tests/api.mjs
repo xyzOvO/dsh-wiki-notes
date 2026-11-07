@@ -17,6 +17,9 @@ process.env.DSH_WIKI_CONFIG = configFile
 // 账本也指到临时目录：测试不许往插件目录里写调用记录
 const callsProbe = path.join(path.dirname(configFile), 'calls.jsonl')
 process.env.DSH_WIKI_CALLS_LOG = callsProbe
+// 治理观察账本也指到临时目录：测试不许往插件目录里写事件
+const governanceProbe = path.join(path.dirname(configFile), 'governance.jsonl')
+process.env.DSH_WIKI_GOVERNANCE_LOG = governanceProbe
 
 // 临时库：至少一页，否则 /save 的「先试扫再落盘」会拒绝保存
 const wiki = mkdtempSync(path.join(os.tmpdir(), 'wiki-notes-api-wiki-'))
@@ -199,6 +202,17 @@ const callsEmpty = await call('GET', '/calls')
 check('/calls 返回 rows 数组', Array.isArray(callsEmpty.json?.rows), JSON.stringify(callsEmpty.json)?.slice(0, 80))
 check('/calls 返回 totals.calls', typeof callsEmpty.json?.totals?.calls === 'number', JSON.stringify(callsEmpty.json?.totals))
 check('/calls 返回 enabled 布尔', callsEmpty.json?.enabled === true, String(callsEmpty.json?.enabled))
+check('/calls 返回同一个 governance 报表', callsEmpty.json?.governance
+  && callsEmpty.json.governance.observe_enabled === true
+  && typeof callsEmpty.json.governance.metrics?.required_check_verification_trigger_rate === 'object'
+  && typeof callsEmpty.json.governance.metrics?.effective_verify_violation_discovery_rate === 'object'
+  && typeof callsEmpty.json.governance.metrics?.observation_coverage === 'object',
+JSON.stringify(callsEmpty.json?.governance)?.slice(0, 160))
+check('/calls 的 governance 不把断言数量写成 0', callsEmpty.json?.governance?.assertion_measurement?.state === 'unavailable'
+  && callsEmpty.json.governance.assertion_measurement.assertion_count === null,
+JSON.stringify(callsEmpty.json?.governance?.assertion_measurement))
+check('/calls?days=3 窗口可覆盖', (await call('GET', '/calls?days=3')).json?.governance?.window?.days === 3,
+  JSON.stringify((await call('GET', '/calls?days=3')).json?.governance?.window))
 
 // 上面那一串 /search 已经在记账了：面板手查的 source 必须是 panel
 const callsAfter = await call('GET', '/calls')
@@ -213,8 +227,17 @@ check('/calls?limit=2 最多两条', (limited.json?.rows ?? []).length <= 2, Str
 
 const offCalls = await call('POST', '/calls/config', JSON.stringify({ enabled: false }))
 check('/calls/config 关掉后回 enabled=false', offCalls.json?.enabled === false, JSON.stringify(offCalls.json))
+check('/calls/config 关闭是破坏性清空', offCalls.json?.cleared === true && offCalls.json?.governance_state === 'disabled', JSON.stringify(offCalls.json))
 const afterOff = await call('GET', '/calls')
 check('关掉后 /calls 的 enabled 是 false', afterOff.json?.enabled === false, String(afterOff.json?.enabled))
+check('关掉后 governance 没有伪装成零', afterOff.json?.governance?.state === 'disabled'
+  && afterOff.json.governance.observe_enabled === false
+  && afterOff.json.governance.metrics?.required_check_verification_trigger_rate?.value === null
+  && afterOff.json.governance.metrics?.effective_verify_violation_discovery_rate?.value === null,
+JSON.stringify(afterOff.json?.governance)?.slice(0, 160))
+check('关掉后旧观察周期无记录落盘', (afterOff.json?.rows ?? []).length === 0, String((afterOff.json?.rows ?? []).length))
+check('治理账本文件确实被清空', !existsSync(governanceProbe) || readFileSync(governanceProbe, 'utf8').trim() === '',
+  existsSync(governanceProbe) ? readFileSync(governanceProbe, 'utf8').slice(0, 80) : '(不存在)')
 await call('POST', '/calls/config', JSON.stringify({ enabled: true }))
 
 const badCfg = await call('POST', '/calls/config', '{"enabled":')

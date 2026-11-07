@@ -66,13 +66,15 @@ function localDay() {
   assert.equal(log.read({}).rows.length, 1)
 }
 
-// 6. enabled=false 时不写文件
+// 6. enabled=false 时连内存缓冲也不收 —— 关闭观察就是明确放弃这段历史
 {
   const f3 = path.join(tmp, 'off.jsonl')
   const log = createCallLog({ file: f3, enabled: false })
-  log.record({ tool: 'wiki_recall', hits: 1 })
-  assert.equal(log.read({}).rows.length, 1)      // 内存里有
-  assert.equal(existsSync(f3), false)            // 文件没有
+  const entry = log.record({ tool: 'wiki_recall', hits: 1 })
+  assert.equal(entry, null)
+  assert.equal(log.buffer().length, 0)
+  assert.equal(log.read({}).rows.length, 0)
+  assert.equal(existsSync(f3), false)
 }
 
 // 7. 命中率排除 verify / observe

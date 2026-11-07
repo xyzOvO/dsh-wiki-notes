@@ -353,4 +353,160 @@ for (const needle of ['wn-copy-query', '.wn-copy-query{', 'wn-cite-copy:focus-vi
 }
 console.log('✓ 复制查询词：按钮可渲染，样式与焦点可见')
 
+// 11) 治理观察指标面板：只查现行 governance 指标键 / 报表展示名称 / UI 标签。
+//    历史决策记录与标注历史口径不在这里检查；no_assertion 不产生也不展示。
+if (typeof preview.WikiGovernancePanel !== 'function') {
+  throw new Error('WikiGovernancePanel 没导出给预览（UI 守卫要直接渲染它）')
+}
+
+// flatten 只收对象、丢字符串；这里另走一遍把文本捞出来，函数组件照样展开一层。
+function renderPanel(props) {
+  const texts = []
+  const nodes = []
+  function walk(node) {
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item)
+      return
+    }
+    if (node === null || node === undefined || typeof node !== 'object') {
+      if (typeof node === 'string' || typeof node === 'number') texts.push(String(node))
+      return
+    }
+    if (typeof node.type === 'function') {
+      walk(node.type(node.props ?? {}))
+      return
+    }
+    nodes.push(node)
+    walk(node.children ?? [])
+  }
+  walk(preview.WikiGovernancePanel(props))
+  return { text: texts.join(' '), nodes }
+}
+
+function metric(numerator, denominator, reasons) {
+  return {
+    numerator,
+    denominator,
+    value: denominator > 0 ? numerator / denominator : null,
+    effective_samples: denominator,
+    excluded_count: reasons.length,
+    exclude_reasons: reasons,
+  }
+}
+
+const enabledGov = {
+  state: 'ok',
+  observe_enabled: true,
+  window: { days: 7 },
+  message: '',
+  metrics: {
+    required_check_verification_trigger_rate: {
+      ...metric(2, 4, ['restart_not_observed']),
+      groups: { partial_insufficient: metric(1, 2, []) },
+    },
+    effective_verify_violation_discovery_rate: metric(1, 3, ['context_missing']),
+    observation_coverage: metric(3, 4, ['capacity']),
+  },
+  assertion_measurement: { state: 'unavailable', assertion_count: null, reason: 'contract_unavailable' },
+  convergence: { metric: '观察到的核验链收敛率', converged: 1, unresolved: 0, not_rechecked: 1 },
+  excluded: {
+    context_samples: { restart_not_observed: 1, capacity: 0 },
+    verify_calls: { context_missing: 1, context_expired: 0, context_corrupt: 0, exec_failed: 0 },
+    late_verify: 1,
+  },
+}
+
+const onPanel = renderPanel({ governance: enabledGov })
+for (const [label, needle] of [
+  ['现行指标键 1', '必核项 Context 核验触发率'],
+  ['现行指标键 2', '有效 Verify 违规发现率'],
+  ['现行指标键 3', '观察覆盖率'],
+  ['partial / insufficient 分组行', '其中 partial / insufficient 分组'],
+  ['触发率百分比', '50.0%'],
+  ['违规发现率按次数不按条数', '33.3%'],
+  ['覆盖率百分比', '75.0%'],
+  ['每项带分子分母', '分子/分母：2/4'],
+  ['每项带有效样本数', '有效样本：4'],
+  ['每项带排除数', '排除：1'],
+  ['每项带排除原因', '排除原因：restart_not_observed'],
+  ['观察是否启用', '观察是否启用：已启用 · 窗口 7 天'],
+  ['断言数量固定不可用', '断言数量：数据不可用'],
+  ['收敛诊断独立命名', '观察到的核验链收敛率：已收敛 1 / 仍未收敛 0 / 未复核 1'],
+  ['排除分层展示', '排除：样本 restart_not_observed 1 · Verify context_missing 1 · 迟到 Verify 1'],
+  ['收敛不等于最终回答可靠', '收敛只表示观察到的核验链，不等于最终回答已证明可靠。'],
+]) {
+  if (!onPanel.text.includes(needle)) throw new Error(`治理面板缺少${label}：${needle}`)
+}
+for (const old of ['必核项完成率', 'Verify 违规率', '模型合规率', '最终回答正确率', '答案修正成功率', '必核项 Context 完成率', 'no_assertion']) {
+  if (onPanel.text.includes(old)) throw new Error(`治理面板混进旧口径或不该展示的分类：${old}`)
+}
+const plainRows = onPanel.nodes.filter((node) => node.props?.className === 'wn-gov-row')
+const subRows = onPanel.nodes.filter((node) => node.props?.className === 'wn-gov-row wn-gov-sub')
+if (plainRows.length !== 3 || subRows.length !== 1) {
+  throw new Error(`治理面板应有 3 项指标 + 1 行分组，实际 ${plainRows.length} / ${subRows.length}`)
+}
+console.log('✓ 治理面板：三项现行指标、分组、分子分母/排除、收敛与边界说明')
+
+// 「0 次违规」是一种有数据的状态，不能与「没有启用观察，因此没有数据」混为一谈。
+const zeroGov = {
+  ...enabledGov,
+  metrics: {
+    ...enabledGov.metrics,
+    effective_verify_violation_discovery_rate: metric(0, 5, []),
+  },
+}
+const zeroPanel = renderPanel({ governance: zeroGov })
+if (!zeroPanel.text.includes('0 次违规（0.0%）')) throw new Error('0 次违规没有单独展示')
+if (zeroPanel.text.includes('没有启用观察，因此没有数据')) throw new Error('有数据时误报「没有启用观察」')
+console.log('✓ 治理面板：0 次违规与「没有启用观察」是两种界面状态')
+
+const blank = () => ({
+  numerator: null, denominator: null, value: null,
+  effective_samples: null, excluded_count: null, exclude_reasons: [],
+})
+const disabledGov = {
+  state: 'disabled',
+  observe_enabled: false,
+  window: { days: 7 },
+  message: '观察未启用，因此没有数据',
+  metrics: {
+    required_check_verification_trigger_rate: { ...blank(), groups: { partial_insufficient: blank() } },
+    effective_verify_violation_discovery_rate: blank(),
+    observation_coverage: blank(),
+  },
+  assertion_measurement: { state: 'unavailable', assertion_count: null, reason: 'contract_unavailable' },
+  convergence: { metric: '观察到的核验链收敛率', converged: null, unresolved: null, not_rechecked: null },
+  excluded: {
+    context_samples: { restart_not_observed: null, capacity: null },
+    verify_calls: { context_missing: null, context_expired: null, context_corrupt: null, exec_failed: null },
+    late_verify: null,
+  },
+}
+const offPanel = renderPanel({ governance: disabledGov })
+for (const needle of ['观察未启用，因此没有数据', '观察是否启用：未启用 · 窗口 7 天', '断言数量：数据不可用', '观察到的核验链收敛率：没有启用观察，因此没有数据']) {
+  if (!offPanel.text.includes(needle)) throw new Error(`关闭态缺少：${needle}`)
+}
+for (const banned of ['0 次违规', '50.0%', '0.0%', '必核项 Context 核验触发率', 'no_assertion']) {
+  if (offPanel.text.includes(banned)) throw new Error(`关闭态把没有数据伪装成了数值/指标：${banned}`)
+}
+if (!offPanel.nodes.some((node) => node.props?.className === 'wn-gov-off')) throw new Error('关闭态没有 .wn-gov-off 容器')
+console.log('✓ 治理面板：关闭态不伪装成 0、不展示指标、不展示 no_assertion')
+
+// 后端没给 governance 时走 fallback，不能崩，也不能写成 0 违规。
+const fallbackPanel = renderPanel({ governance: null })
+if (!fallbackPanel.text.includes('没有启用观察，因此没有数据')) throw new Error('空 governance 没有 fallback 文案')
+if (!fallbackPanel.text.includes('断言数量：数据不可用')) throw new Error('空 governance 丢了断言不可用口径')
+console.log('✓ 治理面板：governance 缺失时静默降级')
+
+for (const [label, needle] of [
+  ['面板只挂在调用记录页签内', 'h(WikiGovernancePanel, { governance: state.governance })'],
+  ['/calls 返回体的 governance 进 state', 'governance: data && data.governance'],
+  ['关闭勾选框旁写明破坏性清空', '关闭会清空现有记录与待核验状态，期间指标不可用'],
+  ['治理面板样式', '.wn-gov{'],
+  ['关闭提示样式', '.wn-calls-warn{'],
+]) {
+  if (!source.includes(needle)) throw new Error(`缺少治理面板实现：${label}（找不到 ${needle}）`)
+}
+console.log('✓ 治理面板：嵌入位置、数据来源、关闭提示与样式守卫')
+
 console.log('\nclient smoke 全部通过')
