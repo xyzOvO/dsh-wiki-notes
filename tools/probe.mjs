@@ -29,8 +29,14 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (!arg.startsWith('--')) continue
-    const key = arg.slice(2)
+    // 同时接受 `--root <path>` 与 `--root=<path>`：bin/cli.mjs 早就两种都支持，
+    // 这里原来只认空格形式，于是 `--root=/data/wiki` 会被当成参数名 `root=/data/wiki` 丢掉，
+    // 报「没有库路径」——和 CLI 当年那个 `--limit 3` 的坑是同一对镜像。
+    const raw = arg.slice(2)
+    const eq = raw.indexOf('=')
+    const key = eq === -1 ? raw : raw.slice(0, eq)
     if (key === 'no-save') { out.save = false; continue }
+    if (eq !== -1) { out[key] = raw.slice(eq + 1); continue }
     const next = argv[i + 1]
     if (next !== undefined && !next.startsWith('--')) { out[key] = next; i += 1 } else { out[key] = true }
   }
@@ -45,7 +51,8 @@ if (!existsSync(queriesFile)) {
   process.exit(2)
 }
 
-const queries = JSON.parse(readFileSync(queriesFile, 'utf8'))
+// Windows 上 `python x.py > f.json` 会写 BOM/UTF-16，去掉 BOM 再解析。
+const queries = JSON.parse(readFileSync(queriesFile, 'utf8').replace(/^\uFEFF/, ''))
 const DRILL = ['知识层-wiki', '知识层', 'wiki', 'Wiki']
 
 /** 跟插件一样：指到上一层时自动下钻，否则会把原始资料页也算进检索面。 */

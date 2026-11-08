@@ -1,3 +1,4 @@
+import './support/quiet-ledger.mjs'
 /**
  * smoke.mjs —— 不开 DSH，按工具契约完整跑一遍，验证「模型会收到什么文本」。
  *

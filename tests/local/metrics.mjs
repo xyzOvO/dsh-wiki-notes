@@ -29,7 +29,9 @@ const FAIL = 2
 
 function readJson(url, label) {
   try {
-    return JSON.parse(readFileSync(url, 'utf8'))
+    // Windows 上 `python ab_export.py > ab_baseline.json` 会写成 UTF-16LE 或带 BOM，
+    // 直接 JSON.parse 会报 Unexpected token。这里统一去掉 BOM 再解析。
+    return JSON.parse(readFileSync(url, 'utf8').replace(/^\uFEFF/, ''))
   } catch (error) {
     if (error?.code === 'ENOENT') return null
     console.error(`读不了 ${label}：${String(error?.message ?? error)}`)
@@ -81,6 +83,11 @@ if (actual !== expected) {
   stale(`库指纹不一致：基线 ${expected} / 当前 ${actual}（${corpus.stats.pages} 页）`)
 }
 
+// 已知分歧白名单：原因已查清、不打算改回去的查询（见 parity-exceptions.json）。
+// 它们不参与对齐分母，但逐条打印「豁免」—— 白名单是记账，不是眼罩。
+const exceptions = readJson(new URL('parity-exceptions.json', HERE), 'parity-exceptions.json')
+const exempt = new Set((exceptions?.queries ?? []).map((item) => item.q))
+
 const known = new Set(corpus.pages.map((page) => page.name))
 const queries = Object.keys(baseline)
 
@@ -105,6 +112,11 @@ for (const query of queries) {
   const jaccard = union === 0 ? 1 : inter / union
   const gone = base.filter((name) => !known.has(name)).length
   const top1 = base.length > 0 && base[0] === mine[0]
+
+  if (exempt.has(query)) {
+    console.log(`${query.padEnd(16)}  ◦ 已知分歧，不计入（差 ${baseSet.size - inter} 页）`)
+    continue
+  }
 
   denom += baseSet.size
   hitSum += inter

@@ -8,6 +8,10 @@ wiki-notes.config.json
 # 作者私有回归基线（含真实笔记标题，只在本地跑）
 tests/local/ab_baseline.json
 
+# 本机评测集与已知分歧白名单：都含真实笔记标题，只留 example 进仓库
+tests/local/queries.json
+tests/local/parity-exceptions.json
+
 # 编辑器与系统噪音
 .DS_Store
 Thumbs.db

@@ -1,3 +1,4 @@
+import './support/quiet-ledger.mjs'
 /**
  * explain.mjs —— 「解释」必须是既有检索行为的解释，不是第二套检索行为。
  *

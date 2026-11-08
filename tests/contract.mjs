@@ -144,6 +144,25 @@ ok('四个工具 description 都有硬触发，且 wiki_recall 引用同一份 D
   if (!source.includes('description: DESCRIPTION')) throw new Error('wiki_recall 没引用 DESCRIPTION')
 })
 
+ok('双模式：recall 只一次、查看原文与深度核验分流、数字引文不强制核验', () => {
+  const source = readFileSync(path.join(ROOT, 'lib/index.js'), 'utf8')
+  const recall = source.match(/const RECALL_TRIGGERS\s*=\s*'([^']*)'/)?.[1] ?? ''
+  const context = source.match(/const CONTEXT_TRIGGERS\s*=\s*'([^']*)'/)?.[1] ?? ''
+  const verify = source.match(/const VERIFY_TRIGGERS\s*=\s*'([^']*)'/)?.[1] ?? ''
+  if (!recall.includes('只调用一次')) throw new Error('RECALL_TRIGGERS 没写「只调用一次」')
+  if (!recall.includes('不得反复检索')) throw new Error('RECALL_TRIGGERS 没禁止反复检索')
+  if (!context.includes('查看原文')) throw new Error('CONTEXT_TRIGGERS 没分流「查看原文」')
+  if (!context.includes('高风险') || !context.includes('后果重大')) throw new Error('CONTEXT_TRIGGERS 没把重要事实限定为高风险、后果重大')
+  if (!context.includes('重要事实') || !context.includes('复杂冲突')) throw new Error('CONTEXT_TRIGGERS 没把「高风险后果重大的重要事实」与「复杂冲突」拆成两个独立触发条件')
+  if (!verify.includes('不得因答案含数字')) throw new Error('VERIFY_TRIGGERS 没取消数字强制核验')
+  if (verify.includes('候选答案含数字') || verify.includes('输出最终答案之前必须用 wiki_verify')) {
+    throw new Error('VERIFY_TRIGGERS 仍残留旧「含数字 / 输出前必须核验」')
+  }
+  if (source.includes('写完答案后自查（尤其含数字、范围、年份、题量分值这类主张时）用它。')) {
+    throw new Error('wiki_verify description 仍残留「含数字就自查」')
+  }
+})
+
 ok('RULE_FAMILIES 是冻结契约 violation.type.enum 的子集', () => {
   const schemaPath = path.join(ROOT, 'docs/契约-stage0/knowledge-gateway.v1.schema.json')
   const schema = JSON.parse(readFileSync(schemaPath, 'utf8'))

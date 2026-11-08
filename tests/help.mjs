@@ -1,3 +1,4 @@
+import './support/quiet-ledger.mjs'
 /**
  * help.mjs —— help 这个 mode 的存在理由，以及「枚举只有一个来源」。
  *
@@ -86,6 +87,8 @@ ok('描述瘦身了，但把细节指向 help', () => {
   // 「何时调用」是描述该干的事，不能被瘦掉
   if (!description.includes('何时必须调用')) throw new Error('丢了「何时必须调用」')
   if (!description.includes('何时可以不查')) throw new Error('丢了「何时可以不查」')
+  if (!description.includes('默认快速回答')) throw new Error('丢了「默认快速回答」')
+  if (!description.includes('资料不足')) throw new Error('丢了「资料不足」披露')
 })
 
 if (failed > 0) {

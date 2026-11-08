@@ -1,3 +1,4 @@
+import './support/quiet-ledger.mjs'
 /**
  * lint.mjs —— 代码审查找出来的三处口径问题，钉死在这里。
  *

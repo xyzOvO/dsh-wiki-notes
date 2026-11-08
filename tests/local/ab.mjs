@@ -20,7 +20,23 @@ if (ROOT === '') {
   console.log('跳过：需要 WIKI_ROOT 指向真实库，且已用 ab_export.py 导出 ab_baseline.json')
   process.exit(0)
 }
-const baseline = JSON.parse(readFileSync(new URL('./ab_baseline.json', import.meta.url), 'utf8'))
+const baseline = JSON.parse(
+  readFileSync(new URL('./ab_baseline.json', import.meta.url), 'utf8').replace(/^\uFEFF/, ''),
+)
+
+// 已知分歧：排序差异已经查清、并认定不需要改回去的查询（理由写在 parity-exceptions.json）。
+// 它们不计入召回覆盖，但仍然打印 —— 白名单是记账，不是眼罩。
+const exceptions = (() => {
+  try {
+    const raw = JSON.parse(
+      readFileSync(new URL('./parity-exceptions.json', import.meta.url), 'utf8').replace(/^\uFEFF/, ''),
+    )
+    return new Set((raw.queries ?? []).map((item) => item.q))
+  } catch {
+    return new Set()
+  }
+})()
+
 const corpus = await loadCorpus(ROOT)
 
 let covered = 0
@@ -30,6 +46,12 @@ for (const [query, pyNames] of Object.entries(baseline)) {
   const mine = search(corpus, query, { limit: 5 }).hits.map((hit) => hit.name)
   const missing = pyNames.filter((name) => !mine.includes(name))
   const extra = mine.filter((name) => !pyNames.includes(name))
+
+  if (exceptions.has(query)) {
+    console.log(`◦ ${query.padEnd(14, ' ')} 已知分歧，不计覆盖（${missing.length} 页不同）`)
+    continue
+  }
+
   covered += pyNames.length - missing.length
   missed += missing.length
 

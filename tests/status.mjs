@@ -1,3 +1,4 @@
+import './support/quiet-ledger.mjs'
 /**
  * status.mjs —— 状态机与覆盖口径的回归。不开 DSH，不依赖本地知识库。
  *
@@ -7,11 +8,11 @@
  */
 
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { decideStatus, freshnessOf, run } from '../lib/engine.js'
+import { decideStatus, freshnessOf, list, run, tokenize } from '../lib/engine.js'
 import { classifyFsError, loadCorpus } from '../lib/corpus.js'
 import { apply } from '../lib/index.js'
 
@@ -357,6 +358,84 @@ ok('degraded 的说明只说一遍（warnings 与 note 不能重复）', () => {
   assert.equal(times, 1, `「降级」出现了 ${times} 次：\n${text}`)
 })
 
+/* ---------------------- 第三批：过滤与取页的三种误导 ---------------------- */
+
+ok('标签写成逗号串时解析成数组（否则「按标签筛」会漏页）', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'wiki-tag-'))
+  const dir = join(root, 'wiki')
+  mkdirSync(join(dir, '概念-concepts'), { recursive: true })
+  writeFileSync(
+    join(dir, '概念-concepts/逗号标签.md'),
+    '---\n类型: 概念\n标签: agent, llm, 记忆\n来源数量: 1\n状态: 稳定\n创建: 2026-01-01\n更新: 2026-01-01\n---\n\n# 逗号标签\n\n## 定义\n\n正文。\n',
+  )
+  writeFileSync(join(dir, 'index.md'), '# 索引\n')
+  writeFileSync(join(dir, 'log.md'), '## [2026-01-01] init | 初始化\n')
+  const corpus = await loadCorpus(dir)
+  const tags = corpus.pages[0].fields['标签']
+  assert.ok(Array.isArray(tags), `标签应当是数组，实际 ${JSON.stringify(tags)}`)
+  assert.deepEqual(tags, ['agent', 'llm', '记忆'])
+  // 真值断言：按标签筛能筛到这页
+  const rows = list(corpus, { tags: ['llm'] }).rows
+  assert.deepEqual(rows.map((row) => row.name), ['逗号标签'])
+})
+
+ok('type 过滤把候选清空 → 说明「库里没这种页」，不是「没这个主题」', () => {
+  const value = run(fakeCorpus({ pages: [PAGE] }), { mode: 'search', query: '上下文', type: '资料' })
+  assert.equal(value.status, 'no_match')
+  assert.equal(value.considered, 0)
+  assert.match(value.note, /库里没有符合 type=资料 的页/)
+  assert.match(value.note, /概念 1/)
+})
+
+ok('page 走别名且别名被两页共用 → partial 并点名两页', () => {
+  const a = { ...PAGE, name: '甲页', file: '概念-concepts/甲页.md' }
+  const b = { ...PAGE, name: '乙页', file: '概念-concepts/乙页.md' }
+  const corpus = fakeCorpus({ pages: [a, b] })
+  corpus.byAlias = new Map([['共用别名', [a, b]]])
+  const value = run(corpus, { mode: 'page', name: '共用别名' })
+  assert.equal(value.status, 'partial')
+  assert.match(value.warnings[0], /甲页/)
+  assert.match(value.warnings[0], /乙页/)
+})
+
+ok('page 命中没有正文的页 → 明说「没有正文」', () => {
+  const empty = { ...PAGE, name: '空页', file: '概念-concepts/空页.md', body: '', sections: [] }
+  const value = run(fakeCorpus({ pages: [empty] }), { mode: 'page', name: '空页' })
+  assert.equal(value.status, 'ok')
+  assert.match(render({ mode: 'page' }, value), /没有正文/)
+})
+
+/* ---------------------- 第二批：降级原因要说到点上 ---------------------- */
+/** 造 n 页，每页正文都是同一句 —— 只为制造「命中面很宽」和「字面沾边」两种情形。 */
+function manyPages(n, body) {
+  return Array.from({ length: n }, (_, i) => ({
+    ...PAGE,
+    name: `合成页${i + 1}`,
+    file: `概念-concepts/合成页${i + 1}.md`,
+    fields: { 类型: '概念', 状态: '稳定', 标签: [], 更新: '2026-11-01', 来源数量: 1 },
+    sections: [{ title: '定义', text: body }],
+    body: `# 合成页${i + 1}\n\n## 定义\n\n${body}`,
+  }))
+}
+
+ok('覆盖率兜底时说「字面覆盖率」，不能再说成 OR', () => {
+  // 整句没有任何一页含这个词元 → AND/OR 都空 → 走覆盖率兜底。
+  const body = '上下文工程说的是怎么把有限预算花在刀刃上。'
+  const value = run(fakeCorpus({ pages: manyPages(24, body) }), { mode: 'search', query: '上下文工程说的是什么呢' })
+  assert.equal(value.coverageFallback, true, '这条查询应当走覆盖率兜底')
+  assert.equal(value.status, 'degraded')
+  assert.match(value.warnings[0], /字面覆盖率/)
+  assert.doesNotMatch(value.warnings[0], /OR/, '兜底不是 OR 降级，措辞不能混')
+})
+
+ok('单字查询：status 仍 ok，但渲染里必须说清「排序没有区分度」', () => {
+  const value = run(fakeCorpus({ pages: manyPages(24, '这一页到处都有的字。') }), { mode: 'search', query: '的' })
+  assert.equal(value.status, 'ok', 'ok 是契约：结果没坏，只是没区分度')
+  assert.equal(Object.hasOwn(value, 'warnings'), false, 'ok 不带 warnings 键')
+  const text = render({ mode: 'search' }, value)
+  assert.match(text, /没有区分度/)
+})
+
 /* ---------------------- 第一批：时效与同名页 ---------------------- */
 
 ok('freshnessOf：今天 / 昨天 / N 天前 / N 个月前 / 可能已过时', () => {
@@ -404,12 +483,56 @@ ok('名字唯一的 page 不触发重名提示', () => {
   assert.equal(value.status, 'ok')
 })
 
+ok('核验发现违规：定向修正后最多再核验一次，复核仍有违规即停止', () => {
+  const verify = tools.find((item) => item?.name === 'wiki_verify')
+  if (!verify) throw new Error('没捕获到 wiki_verify 注册')
+  const text = verify.output.render({}, {
+    kind: 'verify', status: 'violations_found',
+    violations: [{ type: 'gap_not_disclosed', claim: '示例主张', reason: '示例缺口未披露' }],
+  })[0].text
+  assert.match(text, /不得绕过 violations_found/)
+  assert.match(text, /最多再跑一次 wiki_verify/)
+  assert.match(text, /复核仍有违规即停止并披露/)
+  assert.doesNotMatch(text, /超过 4 轮/)
+  assert.doesNotMatch(text, /仍有违规须披露。$/)
+})
+
 ok('零命中的渲染给出下一步，而不只是「换同义词」', () => {
   const value = run(fakeCorpus({ pages: [PAGE] }), { mode: 'search', query: '量子计算' })
   // scanned 由 execute 补，这里手动给：否则会走「扫描到 0 页 = 路径指错」那条分支
   const text = render({ mode: 'search' }, { ...value, scanned: 1 })
   assert.match(text, /页面标题或术语原文重试/)
   assert.match(text, /才可以说「笔记里没有这个主题」/)
+})
+
+ok('过了 type 过滤但整句没命中：要说清是词不对还是被过滤掉了', () => {
+  const corpus = fakeCorpus({ pages: [PAGE] })
+  const value = run(corpus, { mode: 'search', query: '量子计算', type: '概念' })
+  assert.equal(value.status, 'no_match')
+  assert.equal(value.considered, 1)
+  assert.match(value.note, /过滤后仍有 1 页参与检索/)
+  assert.match(value.note, /去掉过滤再搜一次/)
+  // 渲染侧非 ok 时由 warnings 承载同一句话，不该一个字都不出现
+  const text = render({ mode: 'search' }, { ...value, scanned: 1 })
+  assert.match(text, /过滤后仍有 1 页参与检索/)
+})
+
+ok('hit.brokenLinks 取 corpus 解析好的 page.links，不自己重扫正文', () => {
+  // 正文里写着 `[[示例页]]`（行内代码，是举例不是链接），corpus 不会把它算进 links；
+  // 这里再扫一遍正文就会把示例当红链 —— 这正是自己写正则的那一版犯的错。
+  const page = {
+    ...PAGE,
+    body: `${PAGE.body}\n\n写法示例：\`[[示例页]]\`，另有 [[真断链]]。`,
+    links: ['真断链'],
+  }
+  const value = run(fakeCorpus({ pages: [page] }), { mode: 'search', query: '上下文' })
+  assert.deepEqual(value.hits[0].brokenLinks, ['真断链'])
+})
+
+ok('超长查询在引擎层就截到 200 字，不把整段当词元', () => {
+  const tokens = tokenize('甲'.repeat(300))
+  assert.equal(tokens.length, 1)
+  assert.equal(tokens[0].length, 200)
 })
 
 console.log(`\n[status] 全部通过（${passed} 项）`)

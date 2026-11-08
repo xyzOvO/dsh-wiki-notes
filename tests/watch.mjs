@@ -1,3 +1,4 @@
+import './support/quiet-ledger.mjs'
 /**
  * watch smoke：在临时迷你库里验证「改完文件 → 缓存作废 → 下次查询看到新内容」。
  *

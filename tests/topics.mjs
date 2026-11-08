@@ -1,3 +1,4 @@
+import './support/quiet-ledger.mjs'
 /**
  * topics.mjs —— 主题词那一行（systemPrompt.context）。
  *
@@ -67,9 +68,10 @@ function makeCtx() {
   const gov = sectionOf(state, 'wiki-notes:governance')
   check('治理总纲 order 为 241 且不插值', gov?.order === 241 && gov?.interpolate === false, JSON.stringify({ order: gov?.order, interpolate: gov?.interpolate }))
   const govText = typeof gov?.text === 'function' ? gov.text() : ''
-  check('治理总纲要求输出最终答案之前必须核验', govText.includes('输出最终答案之前必须用 wiki_verify'), govText.slice(0, 80))
+  check('治理总纲默认快速回答、只一次 recall，不再强制输出前核验', govText.includes('默认快速回答') && govText.includes('只调用一次 wiki_recall') && !govText.includes('输出最终答案之前必须用 wiki_verify'), govText.slice(0, 80))
   check('治理总纲禁止绕过 violations_found', govText.includes('不得绕过 violations_found'), govText.slice(0, 80))
-  check('治理总纲覆盖 partial / insufficient', govText.includes('partial / insufficient') && govText.includes('必须走 wiki_verify'), govText.slice(0, 80))
+  check('治理总纲区分资料不足与深度核验，纠错只复核一次', govText.includes('资料不足') && govText.includes('深度核验') && govText.includes('最多再核验一次') && !govText.includes('超过 4 轮'), govText.slice(0, 80))
+  check('治理总纲把重要事实限定为高风险后果重大，且与复杂冲突分开；查看原文与深度核验分流', govText.includes('高风险') && govText.includes('后果重大') && govText.includes('重要事实') && govText.includes('复杂冲突') && govText.includes('普通数字题、概念题不升级') && govText.includes('查看原文'), govText.slice(0, 80))
   check('治理总纲是稳定文本，两次求值相同', gov.text() === gov.text(), '两次结果不同')
 }
 

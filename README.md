@@ -221,9 +221,15 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 ## 检索质量
 
-基线是 v3：14 条 query / 68 个槽位，比 top5 集合，**Recall@5 = 100%，当回归硬门禁**（口径、判据与历史快照见 [docs/metrics.md](docs/metrics.md)）。单条查询 0–2ms，扫 95 页约 76ms。
+三条线分开看，别混成一个数字：
 
-评分刻意朴素：标题全等 120 / 标题含 60 / 别名含 50 / 标签含 25 / 正文词频 ×3（封顶 36）/ index 摘要只在其它通道全 0 时补 8。三处经验细节：摘要分只补漏不抢位、同分用码点序（拼音序不可复现）、选节排除清单类与元讨论类小节。
+- **对齐（parity）**：`tests/local/ab.mjs` 比的是「JS 引擎的前 5 是否覆盖 Python `search.py` 的前 5」，当前 **166/166，漏 0**；`tests/local/metrics.mjs` 比同一批槽位的集合与排序，Recall@5 100%、Jaccard 0.63，当硬门禁。两侧刻意保留少量已知分歧（疑问词剥离是有意改进、index 摘要 +8、类型层平局裁决），名单在本地 `tests/local/parity-exceptions.json`，**不入仓库**。
+- **质量（recall）**：`tests/local/recall.mjs` 跑人工标注的评测集，报 Recall@5 / Top-1 / MRR@5 并按标签分组。当前基线 **Recall@5 85.2% · Top-1 76.3% · MRR 0.819**（59 条查询 / 194 个槽位），低于基线即 exit 2。评测集 `tests/local/queries.json` 含真实笔记主题，**不入仓库**；仓库里只有中性 6 条的 `queries.example.json`。
+- **性能**：123 页扫一遍约 51ms，单条查询 4ms 上下；`tools/probe.mjs` 另攒一条 hit@1 / hit@3 / Recall@5 的趋势 CSV。
+
+评分刻意朴素：标题全等 120 / 标题含 60 / 别名含 50 / 标签含 25 / 正文词频 ×3（封顶 36）/ index 摘要只在其它通道全 0 时补 8；同分再比类型层（综合 3 · 总览 3 / 概念·实体·对比 2 / 资料 1）→ 更新时间 → 码点序。四处经验细节：摘要分只补漏不抢位、同分用码点序（拼音序不可复现）、选节排除清单类与元讨论类小节、总览与综合同层（总览是全库唯一入口页，跨模块的词在它里面出现分量不同）。
+
+中文连写整句在 AND / OR 双双落空时会降级到**字面覆盖率兜底**（中文二字组 / 拉丁整词，覆盖率 ≥45% 才入选，`degraded: true` 并在结果里说明），这是缓解不是语义检索；查询先做 NFKC 归一化并剥掉两端疑问词。
 
 ---
 
@@ -262,9 +268,10 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 ## 已知局限
 
-- 中文不分词，靠空格切分；连写词靠 `别名` 补。
+- 中文不分词，靠空格切分；连写词靠 `别名` 补。整句中文拿不到命中时会降级成字面覆盖率排序，那是**字面**匹配，语义相近但用词不同照样认不出。
 - 页名本身是查询词时，正文很少重复该词，选节可能偏。
-- 每次调用全量扫描；70–100 页无所谓，再大一个数量级要上增量索引。
+- 每次调用全量扫描；123 页约 51ms，再大一个数量级要上增量索引。
+- 每命中一页要塞约 900 字符正文（`sectionChars` 可调），一次返回 5 页就是 4–5k 字符 —— 瓶颈常在上下文预算而不在检索速度。
 - **重启后第一次扫描是冷盘读**：95 页实测 5,217ms（此后 29ms）。插件启动就预热一次，所以这段延迟通常落在你还没提问的时候；但第一条查询正好赶上也确实要等。
 - **面板没打开时 `/`、`Ctrl/⌘ + K` 不会有反应**：快捷键绑在面板上，而宿主的 `sidebarRightTabs` 只提供 `register()`，没有「打开 / 激活页签」的接口，插件没法从外面把面板叫出来。
 - **知识网关那套仍是两套实现**：JS 侧 `wiki_recall` 和 Python 侧 `wiki_context` 各自解析页面，差在结构解读层。统一方向未定。
@@ -287,20 +294,27 @@ tools/probe.mjs 检索质量探针：hit@1 / hit@3 / Recall@5，追加趋势 CSV
 tools/preview.mjs 把面板渲染成静态页（真组件 + 真 CSS），改样式不必重启 DSH
 docs/库结构.md  库结构约定（这份才是一手文档）
 docs/README.md  文档导航页
+CHANGELOG.md    版本变更记录
 docs/superpowers/specs/  检索面板的设计稿
 docs/契约-stage0/  知识网关的设计与验收记录
 examples/       可跑的最小样例库
-tests/          smoke / status / lint / explain / api / help / contract / watch / client bundle / gateway
+tests/          smoke / status / lint / explain / api / help / contract / watch / client
+                / tier / render / bridge / store / calls / calls-read / gateway
+tests/local/    作者本机的评测集与回归基线（query 与基线文件不入仓库，只留 *.example）
+tests/support/  测试用小工具（quiet-ledger：把账本重定向到临时目录，别写进你的调用记录）
 ```
 
 ```bash
-npm test                                           # 跑样例库，不需要本地知识库
+npm test                                           # 跑样例库，不需要本地知识库（25 个文件）
 node bin/cli.mjs search 上下文 --root=examples/sample-wiki
 WIKI_ROOT="/path/your/wiki" node tests/smoke.mjs   # 拿自己的库跑通就行（不校验答案）
+WIKI_ROOT="/path/your/wiki" node tests/local/recall.mjs   # 质量评测：Recall@5 / Top-1 / MRR（低于 floor 退 2）
 npm run probe -- --root "/path/your/wiki"          # 攒一行检索质量趋势
 node tools/preview.mjs                             # 出 preview/panel.html，浏览器直接看面板
 node tools/preview.mjs --diag                      # 同上，并量一遍宽度 / 截断 / 溢出 / 对比度
 ```
+
+`tests/local/` 那套要先把 `queries.example.json` 复制成 `queries.json` 再按自己的库改（`expect` 写「必须进前 5 的页名」，由人标，不依赖任何旧引擎的输出）。基线文件 `ab_baseline.json` 也是本地产物，重导用 `python ab_export.py > ab_baseline.json`。
 
 跑知识网关那两段真实通路，要给两个环境变量（不给就整段跳过，不会假装通过）：
 
@@ -308,7 +322,9 @@ node tools/preview.mjs --diag                      # 同上，并量一遍宽度
 WIKI_ROOT="/path/your/知识层-wiki" WIKI_TOOLS="/path/your/工具-tools" node tests/gateway.mjs
 ```
 
-发版：改 `version` → `npm test` 全绿（`scripts.test` 只调 `node tests/*.mjs`，所以 20.x 也能跑；`node --run test` 要 Node 22+，别在低版本上用它，也别拿它当门槛的证明）→ `npm pack --dry-run` 看一眼打包内容（`files` 只含 `lib`/`bin`/`docs`/`examples`/`README.md`/`LICENSE`/`cordis.patch.yml`，`preview/` 与 `tools/` 不进包）→ `npm publish`。发布前先 `npm whoami --registry=https://registry.npmjs.org/` 确认已登录（本机 token 在 `.npmrc` 的 `//registry.npmjs.org/:_authToken=`；注意 `npm config get registry` 指向 npmmirror，而 npmmirror 那边不认这个 token，登录状态要显式指定 registry 去查）。
+发版：改 `version` → `npm test` 全绿（`scripts.test` 只串跑 `node tests/*.mjs`，25 个文件；`node --run test` 要 Node 22+，别在低版本上用它，也别拿它当门槛的证明）→ `npm pack --dry-run` 看一眼打包内容（`files` 只含 `lib`/`bin`/`docs`/`examples`/`README.md`/`CHANGELOG.md`/`LICENSE`/`cordis.patch.yml`，`preview/` 与 `tools/` 与 `tests/` 都不进包）→ **显式** `npm publish --registry=https://registry.npmjs.org/`。发布前先 `npm whoami --registry=https://registry.npmjs.org/` 确认已登录（本机 token 在 `.npmrc` 的 `//registry.npmjs.org/:_authToken=`；注意 `npm config get registry` 指向 npmmirror，而 npmmirror 那边不认这个 token，登录状态要显式指定 registry 去查）。发完要当场核三件事：`npm view <pkg>@<ver> dist.tarball` 取回的地址（带 fresh cache 与 REST cachebust）、下载 tarball 对 SHA256、`gh release view` 的 `isLatest`（注意它不能直接 `--json isLatest`）。
+
+打包进了你的笔记标题怎么办：`tests/local/` 的 query 集、分歧白名单、回归基线与 `calls.jsonl` / `governance.jsonl` / `probe-history.csv` 都在 `.gitignore` 里，只在本机跑。发版前用 `git diff --cached | Select-String '<你的用户名>|<你的库路径>|<真实页名>'` 过一遍暂存区，命中就改口径再提交。
 
 改样式的两条经验：
 

@@ -1,3 +1,4 @@
+import './support/quiet-ledger.mjs'
 /**
  * draft.mjs —— 回写骨架的三处可信度修正（2026-11-03）：
  *

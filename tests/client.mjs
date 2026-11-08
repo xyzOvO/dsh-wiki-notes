@@ -1,3 +1,4 @@
+import './support/quiet-ledger.mjs'
 /**
  * client smoke：在 node 里用最小 stub 跑 lib/client.js，验证
  * 「模块结构 + apply 注册 + CSS 注入」这条链路，不需要真浏览器。

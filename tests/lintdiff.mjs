@@ -1,3 +1,4 @@
+import './support/quiet-ledger.mjs'
 /**
  * lintdiff.mjs —— 体检的历史对比：第二次跑要说出「变了什么」。
  *

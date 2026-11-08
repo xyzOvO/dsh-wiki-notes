@@ -1,6 +1,6 @@
 {
   "name": "dsh-wiki-notes",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "type": "module",
   "description": "Read-only knowledge gateway over a local Markdown vault for DeepSeek Harness — recall, evidence pack, answer verification, call audit | 本地 Markdown 笔记库的只读知识网关：检索、证据包、核验、调用审计",
   "keywords": [
@@ -33,13 +33,14 @@
     "examples",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20.13.0"
   },
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/status.mjs && node tests/params.mjs && node tests/fields.mjs && node tests/robust.mjs && node tests/lint.mjs && node tests/lintdiff.mjs && node tests/config.mjs && node tests/explain.mjs && node tests/cli.mjs && node tests/api.mjs && node tests/help.mjs && node tests/contract.mjs && node tests/topics.mjs && node tests/draft.mjs && node tests/calls.mjs && node tests/governance.mjs && node tests/inject.mjs && node tests/watch.mjs && node tests/client.mjs",
+    "test": "node tests/smoke.mjs && node tests/status.mjs && node tests/params.mjs && node tests/fields.mjs && node tests/robust.mjs && node tests/lint.mjs && node tests/lintdiff.mjs && node tests/config.mjs && node tests/explain.mjs && node tests/cli.mjs && node tests/api.mjs && node tests/help.mjs && node tests/contract.mjs && node tests/topics.mjs && node tests/draft.mjs && node tests/calls.mjs && node tests/governance.mjs && node tests/inject.mjs && node tests/watch.mjs && node tests/client.mjs && node tests/tier.mjs && node tests/render.mjs && node tests/calls-read.mjs && node tests/store.mjs && node tests/bridge.mjs",
     "cli": "node bin/cli.mjs",
     "probe": "node tools/probe.mjs"
   },
