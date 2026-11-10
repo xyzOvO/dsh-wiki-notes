@@ -160,7 +160,16 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 没配时工具会直接告诉你「还没配置知识库路径」，不会静默扫空目录。
 
-`wiki_context` / `wiki_verify` / `wiki_observe` 还需要一条 Python 通路（`bridge.python` + `bridge.toolsRoot`，后者是含 `wiki_bridge.py` 的目录）。没配的话这三个工具会明确报 `E_PYTHON_UNAVAILABLE` —— **不会假装成「知识库里没有」**。配置形状见 [docs/契约-stage0/阶段4-插件接入.md](docs/契约-stage0/阶段4-插件接入.md)。
+`wiki_context` / `wiki_verify` / `wiki_observe` 还需要一条 Python 通路（`bridge.python` + `bridge.toolsRoot`，后者是含 `wiki_bridge.py` 的目录）。没配或配错时这三个工具会明确报错，且**不会假装成「知识库里没有」**：
+
+| 情况 | 错误码 |
+|---|---|
+| 还没配 `bridge.toolsRoot` | `E_TOOLS_ROOT_MISSING` |
+| 配了但目录不存在 | `E_TOOLS_ROOT_MISSING` |
+| 目录在、里面没有 `wiki_bridge.py` | `E_BRIDGE_SCRIPT_MISSING` |
+| `bridge.python` 找不到（不在 PATH、路径写错） | `E_PYTHON_UNAVAILABLE` |
+
+配置形状见 [docs/契约-stage0/阶段4-插件接入.md](docs/契约-stage0/阶段4-插件接入.md)。
 
 ---
 

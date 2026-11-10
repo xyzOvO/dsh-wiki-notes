@@ -18,10 +18,14 @@
  *   没有 WIKI_ROOT            → 跳过
  *   queries.json 缺失          → 跳过（这是本地回归，不是通用用例）
  *   expect 里的页在库里找不到  → LABEL_ERROR（标注错了，先修标注，别怪引擎）
+ *   库指纹与 queries.json 不符  → BASELINE_STALE（库换了，floor 失去参照系，别怪引擎）
  *   低于 floor                → GATE_FAIL（退步了）
  *   其余                      → PASS
  *
  * floor 在 queries.json 里，只升不降。要往下调必须说明为什么。
+ * 更关键的是：floor 是「在这份库上测出来的」。queries.json 的 libraryFingerprint
+ * 把它钉在库快照上 —— 库一变，旧 floor 就不再是这库的地板，硬比会冤枉引擎。
+ * 指纹算法与 metrics.mjs 共用，见 tests/local/library-fingerprint.mjs。
  *
  * 用法：WIKI_ROOT="<知识层目录>" node tests/local/recall.mjs [--verbose]
  */
@@ -30,10 +34,12 @@ import { readFileSync } from 'node:fs'
 
 import { loadCorpus } from '../../lib/corpus.js'
 import { search } from '../../lib/engine.js'
+import { fingerprintOf } from './library-fingerprint.mjs'
 
 const SKIP = 0
 const FAIL = 2
 const LABEL = 3
+const STALE = 3
 
 const root = process.env.WIKI_ROOT ?? ''
 if (root === '') {
@@ -62,6 +68,8 @@ if (queries.length === 0) {
 }
 
 const corpus = await loadCorpus(root)
+const actualFingerprint = fingerprintOf(corpus)
+const expectedFingerprint = typeof suite.libraryFingerprint === 'string' ? suite.libraryFingerprint : ''
 const known = new Set(corpus.pages.map((page) => page.name))
 
 // 标错页名是最常见的错误，单独报，别混进指标
@@ -121,7 +129,7 @@ const top1 = queries.length === 0 ? 0 : top1Hit / queries.length
 const mrr = queries.length === 0 ? 0 : mrrSum / queries.length
 const floor = suite.floor ?? {}
 
-console.log(`\n库 ${corpus.stats.pages} 页　查询 ${queries.length} 条　应命中 ${expectTotal} 页　queries.json ${suite.version ?? '?'}`)
+console.log(`\n库 ${corpus.stats.pages} 页　查询 ${queries.length} 条　应命中 ${expectTotal} 页　queries.json ${suite.version ?? '?'}　指纹 ${actualFingerprint}`)
 console.log(`${'查询'.padEnd(22)} ${'命'.padStart(3)} ${'首'.padStart(3)}  漏掉的`)
 
 for (const row of rows) {
@@ -148,6 +156,21 @@ console.log('')
 console.log(`Recall@5   ${(recall * 100).toFixed(1)}%  (${hitTotal}/${expectTotal} 页)${rate_note(recall, floor.recallAt5)}`)
 console.log(`Top-1      ${(top1 * 100).toFixed(1)}%  (${top1Hit}/${queries.length} 条)${rate_note(top1, floor.top1)}`)
 console.log(`MRR@5      ${mrr.toFixed(3)}${rate_note(mrr, floor.mrrAt5)}`)
+
+// 上面的数字照实打，但别拿它们去比一份别的库的 floor。
+// 库一换，expect 还是那些页，排序却会变（新页把老页挤到第 2 是最常见的形状），
+// 这时 GATE_FAIL 说的是「参照系过期了」，不是「引擎退步」。
+if (expectedFingerprint === '' || expectedFingerprint !== actualFingerprint) {
+  console.log(`\nBASELINE_STALE：queries.json 的 libraryFingerprint 与当前库不一致`)
+  console.log(`  queries.json 写的是：${expectedFingerprint || '（没写）'}`)
+  console.log(`  当前库实际是：      ${actualFingerprint}（${corpus.stats.pages} 页）`)
+  console.log('\n这次不出 PASS / GATE_FAIL —— floor 是在另一份库上量出来的，比了没有意义。')
+  console.log('先复核：库是不是真的换了 / 指纹算法是不是改了 / 引擎有没有动过排序。')
+  console.log('确认没问题后，把当前指纹写进 queries.json 的 libraryFingerprint，')
+  console.log('并按这份库重新标定 floor（改动要连同证据一起留在 floorNote 里，别悄悄调数字）。')
+  console.log('注意：metrics.mjs / ab_baseline.meta.json 用的是同一个指纹函数，那边也要同步。')
+  process.exit(STALE)
+}
 
 function rate_note(actual, baseline) {
   if (typeof baseline !== 'number' || baseline <= 0) return '  （floor 未设）'

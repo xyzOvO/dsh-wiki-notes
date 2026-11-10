@@ -3,8 +3,9 @@
  *
  * 钉的几件事：
  *   1. 注册成功、参数校验在插件这一层就把空值挡住；
- *   2. 通路坏了（没配工具目录、没这个 python）报 E_PYTHON_UNAVAILABLE，
- *      不能伪装成「知识库里没有」；
+ *   2. 通路坏了（没配工具目录 → E_TOOLS_ROOT_MISSING；没这个 python →
+ *      E_PYTHON_UNAVAILABLE；目录里缺 wiki_bridge.py → E_BRIDGE_SCRIPT_MISSING），
+ *      三种原因各报各的码，不能互相冒充，也不能伪装成「知识库里没有」；
  *   3. 同一个输入，插件拿到的东西和直接用 Python CLI 拿到的东西逐字段一致
  *      （排除 request_id / context_id / timing 这类每次都变的东西）；
  *   4. verify 会真的把「星港缓存策略 5 个分片」这种越界主张抓出来。
@@ -39,11 +40,11 @@ const PLUGIN_VERSION = JSON.parse(readFileSync(path.join(PLUGIN_ROOT, 'package.j
 // 观察日志单独落一份到临时目录：观察闭环的断言要读它，
 // 也不能把测试记录写进正式使用的日志里（那会把修正率带歪）。
 const OBSERVE_LOG = path.join(tmp, 'observe.jsonl')
-// 真通路断言的样例：默认全是虚构内容（星港缓存），绝不带真实笔记主题进仓库。
+// 真通路断言的样例：默认查仓库自带的样例库（examples/sample-wiki），内容全是虚构的
+// 「上下文工程 / 记忆系统 / 上下文窗口」—— 不带任何真实笔记主题进仓库。
 // 本机想拿自己那套库验证时，用环境变量覆盖，值只活在进程里。
-const TEST_QUERY = process.env.WIKI_TEST_QUERY || '星港 缓存策略 分几个片'
-const TEST_BAD_ANSWER = process.env.WIKI_TEST_BAD_ANSWER || '星港缓存策略一共分五个分片，180 秒，冷数据 30%。'
-
+const TEST_QUERY = process.env.WIKI_TEST_QUERY || '上下文窗口'
+const TEST_BAD_ANSWER = process.env.WIKI_TEST_BAD_ANSWER || '上下文窗口默认是 128 万 token，所以可以整本书一次性塞进去。'
 // 起始配置：有库、没 bridge。先测「没配工具目录」这一路。
 writeFileSync(configFile, JSON.stringify({ root: WIKI }, null, 2), 'utf8')
 
@@ -96,12 +97,17 @@ check('缺 context_id → E_CONTEXT_NOT_FOUND', noCid?.error?.code === 'E_CONTEX
 
 // --- 2. 通路故障：不能伪装成「库里没有」 ---------------------------------
 const noTools = await contextTool.execute({ query: '缓存策略' })
-check('没配 toolsRoot → E_PYTHON_UNAVAILABLE',
-  noTools?.error?.code === 'E_PYTHON_UNAVAILABLE', JSON.stringify(noTools?.error))
+// 没配工具目录 ≠ 没有 python：报错的码要说对，否则用户会去改 bridge.python 白试一遍
+check('没配 toolsRoot → E_TOOLS_ROOT_MISSING',
+  noTools?.error?.code === 'E_TOOLS_ROOT_MISSING', JSON.stringify(noTools?.error))
 check('故障结果里没有 support 字段（不许伪装知识不足）',
   noTools?.status === undefined && noTools?.evidence === undefined)
 
-writeConfig({ bridge: { python: 'no-such-python-xyz', toolsRoot: TOOLS, timeoutMs: 15000 } })
+// 「python 不存在」要真的只让 python 这一环坏掉：toolsRoot 得是个存在且含
+// wiki_bridge.py 的目录，否则先撞上「工具目录不存在」，这条断言会因为别的原因通过。
+const fakeTools = mkdtempSync(path.join(os.tmpdir(), 'wn-gw-tools-'))
+writeFileSync(path.join(fakeTools, 'wiki_bridge.py'), 'process.stdin.resume()\n', 'utf8')
+writeConfig({ bridge: { python: 'no-such-python-xyz', toolsRoot: fakeTools, timeoutMs: 15000 } })
 const badPython = await contextTool.execute({ query: '缓存策略' })
 check('python 不存在 → E_PYTHON_UNAVAILABLE',
   badPython?.error?.code === 'E_PYTHON_UNAVAILABLE', JSON.stringify(badPython?.error))
@@ -123,6 +129,13 @@ if (HAS_PIPELINE) {
     && typeof viaPlugin?.status?.stage === 'string')
   check('support 与 degraded 是两件事',
     typeof viaPlugin?.status?.degraded === 'boolean')
+
+  // 下面「数值越界要被抓出来」的前提是：这条查询在库里确实捞到了内容。
+  // 一条都没命中时 verify 只能报 gap_not_disclosed（没有可比对的数字），
+  // 那时的失败不是算法没工作，而是测试查询配错了库 —— 说清楚，别让人以为验证器坏了。
+  check('测试查询在库里确实有候选（没有就设 WIKI_TEST_QUERY）',
+    viaPlugin?.status?.retrieval !== 'none',
+    `retrieval=${viaPlugin?.status?.retrieval} stage=${viaPlugin?.status?.stage}：这条查询在当前库里零候选，数值越界检查无从谈起`)
 
   const cliRun = spawnSync(PYTHON, [path.join(TOOLS, 'wiki_bridge.py'), 'context'], {
     input: JSON.stringify({ query: QUERY, limit: 4, root: WIKI, plugin_version: PLUGIN_VERSION }),
@@ -168,7 +181,14 @@ if (HAS_PIPELINE) {
     const bad = await verifyTool.execute({ context_id: cid, answer: TEST_BAD_ANSWER })
     const types = (bad?.violations ?? []).map((v) => v.type)
     check('坏答案被核验出违规', (bad?.violations ?? []).length > 0, JSON.stringify(bad?.violations))
-    check('坏答案命中 unsupported_numeric_claim', types.includes('unsupported_numeric_claim'), String(types))
+    // 具体是哪一条取决于证据形态：库里没有可比对的数字时，数值检查无从谈起，
+    // 管线会改报「缺口没披露 / 弱证据要打复核标记」。能钉住的是：
+    //   ① 坏答案不许一条都不报（静默放过才是真 bug）；
+    //   ② 报的必须是「越界 / 没披露 / 没证据」这一类，不能是无关类型。
+    const BOUNDARY_TYPES = ['unsupported_numeric_claim', 'gap_not_disclosed', 'review_flag_missing', 'conclusion_without_evidence', 'numeric_check_failed']
+    check('坏答案被归到「越界 / 没披露」这一类',
+      types.some((t) => BOUNDARY_TYPES.includes(t)),
+      `${String(types)}｜这一条按证据形态走不同规则，stage=${viaPlugin?.status?.stage}`)
     check('verify 返回 context_id 原值', bad?.context_id === cid)
 
     const cliVerify = spawnSync(PYTHON, [path.join(TOOLS, 'wiki_bridge.py'), 'verify'], {

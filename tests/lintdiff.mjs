@@ -11,6 +11,8 @@ import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { tmpdir } from 'node:os'
 
+const BOM = '\uFEFF'
+
 const cfgDir = mkdtempSync(path.join(tmpdir(), 'wiki-notes-lintdiff-cfg-'))
 process.env.DSH_WIKI_CONFIG = path.join(cfgDir, 'wiki-notes.config.json')
 
@@ -95,6 +97,26 @@ ok('修掉之后报「已修」', () => {
   if (!third.sinceLast.fixed.some((item) => item.includes('还没写的页'))) {
     throw new Error(`已修项里没有它：${JSON.stringify(third.sinceLast.fixed)}`)
   }
+})
+
+// 第四轮：历史文件带 BOM（PowerShell 5.1 写出的 JSON 常见）——不许被当成「第一次」。
+// 以前 recordLintRun 裸 JSON.parse，带 BOM 会抛错 → previous=null → first=true，
+// 「与上次相比」整段消失，历史对比被静默重置。
+const historyFile = path.join(cfgDir, 'lint-history.json')
+const historyBefore = JSON.parse(readFileSync(historyFile, 'utf8'))
+writeFileSync(historyFile, BOM + JSON.stringify({ ...historyBefore, at: '2026-11-10T00:00:00.000Z' }), 'utf8')
+const fourth = await register().execute({ mode: 'lint' })
+
+ok('带 BOM 的历史文件：不重置成「第一次记录基线」', () => {
+  if (fourth.sinceLast?.first === true) throw new Error(JSON.stringify(fourth.sinceLast))
+  if (fourth.sinceLast?.at !== '2026-11-10T00:00:00.000Z') {
+    throw new Error(`上次时间没读到：${JSON.stringify(fourth.sinceLast)}`)
+  }
+})
+
+ok('带 BOM 的历史文件：渲染里仍说「与上次…相比」', () => {
+  const text = register().output.render({ mode: 'lint' }, fourth).map((b) => b.text).join('\n')
+  if (!/与上次（2026-11-10）相比/.test(text)) throw new Error(text.slice(0, 300))
 })
 
 if (failed > 0) {

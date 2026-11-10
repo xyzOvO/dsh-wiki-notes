@@ -8,19 +8,23 @@
  * 判定顺序（先中先停）：
  *   没有 WIKI_ROOT            → 跳过
  *   元数据缺失 / 无指纹        → BASELINE_STALE
- *   指纹不一致                → BASELINE_STALE（库变了，先重导出基线，别怪算法）
+ *   指纹不一致                → BASELINE_STALE（库内容或指纹算法变了，先重导基线，别怪算法）
+ *
+ * 指纹由 tests/local/library-fingerprint.mjs 计算，recall.mjs 用的是同一个函数：
+ * 量的是「检索真正读到的内容」（正文 / frontmatter / index 摘要 / 规模行），
+ * 不是只量正文长度 —— 等长改写曾经让基线悄悄失效过。
  *   指纹一致但 Recall < 100%   → GATE_FAIL（算法退步，逐条解释漏项）
  *   其余                      → PASS
  *
  * 用法：WIKI_ROOT="<知识层目录>" node tests/local/metrics.mjs
  */
 
-import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 
 import { loadCorpus } from '../../lib/corpus.js'
 import { search } from '../../lib/engine.js'
+import { fingerprintOf } from './library-fingerprint.mjs'
 
 const HERE = new URL('./', import.meta.url)
 
@@ -50,17 +54,16 @@ function engineCommit() {
   }
 }
 
-function fingerprintOf(corpus) {
-  const joined = corpus.pages.map((page) => `${page.name}|${page.body.length}`).sort().join('\n')
-  return 'sha256:' + createHash('sha256').update(joined).digest('hex').slice(0, 16)
-}
-
 function stale(reason) {
   console.log(`\nBASELINE_STALE：${reason}`)
-  console.log('库和基线对不上，这次不出指标。先重新导出基线：')
-  console.log('  AB_QUERIES=... WIKI_TOOLS_DIR=... python tests/local/ab_export.py > tests/local/ab_baseline.json')
-  console.log('  （然后更新 ab_baseline.meta.json 里的 library.fingerprint）')
-  console.log('\n这不是算法失败 —— 知识库变了，基线就该跟着重导。')
+  console.log('库和基线对不上，这次不出指标。先复核是「库内容变了」还是「指纹算法变了」：')
+  console.log('  · 只是指纹算法升级（库没动）→ 排序没变，ab_baseline.json 不用重导，')
+  console.log('    只把 meta 的 library.fingerprint 和 queries.json 的 libraryFingerprint 改成新值。')
+  console.log('  · 库内容真的变了 → 重新导出基线：')
+  console.log('    AB_QUERIES=... WIKI_TOOLS_DIR=... python tests/local/ab_export.py | Out-File -Encoding utf8 tests/local/ab_baseline.json')
+  console.log('    （PowerShell 的 > 默认写 UTF-16，会写出 readJson 读不了的 JSON）')
+  console.log('    然后更新 meta 的 library.fingerprint，并按新库重新标定 queries.json 的 floor / floorNote。')
+  console.log('\n这不是算法失败 —— 参照系过期了，就该先把参照系对齐。')
   process.exit(STALE)
 }
 

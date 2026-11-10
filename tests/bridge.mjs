@@ -29,11 +29,11 @@ function fakeBridge(name, source) {
 
 const call = (toolsRoot, extra = {}) => runBridge({ command: 'ping', payload: { q: 1 }, python: NODE, toolsRoot, timeoutMs: 8000, ...extra })
 
-// 1. 没配 toolsRoot：直接回 unavailable，且不碰进程
+// 1. 没配 toolsRoot：回的是「工具目录没配」，不是「没有 python」
 {
   const r = await call('', { python: '/definitely/not/python' })
   assert.equal(r.ok, false)
-  assert.equal(r.error.error.code, 'E_PYTHON_UNAVAILABLE')
+  assert.equal(r.error.error.code, 'E_TOOLS_ROOT_MISSING')
   assert.match(r.error.error.message, /toolsRoot/)
   assert.equal(r.ms, 0)
 }
@@ -44,6 +44,28 @@ const call = (toolsRoot, extra = {}) => runBridge({ command: 'ping', payload: { 
   assert.equal(r.ok, false)
   assert.equal(r.error.error.code, 'E_PYTHON_UNAVAILABLE')
   assert.match(r.error.error.message, /找不到 Python 解释器/)
+}
+
+// 2b. toolsRoot 指向不存在的目录：不许说成「找不到 Python」
+//     （Node 对「cwd 不存在」也报 ENOENT，不先看一眼就会把人引到 bridge.python 上白改一通）
+{
+  const missing = path.join(tmp, 'no-such-tools-dir')
+  const r = await call(missing)
+  assert.equal(r.ok, false)
+  assert.equal(r.error.error.code, 'E_TOOLS_ROOT_MISSING')
+  assert.match(r.error.error.message, /工具目录不存在/)
+  assert.match(r.error.error.message, /bridge\.toolsRoot/)
+  assert.equal(r.ms >= 0, true)
+}
+
+// 2c. 目录在、但里面没有 wiki_bridge.py：说清缺的是那个文件
+{
+  const empty = path.join(tmp, 'empty-tools')
+  mkdirSync(empty, { recursive: true })
+  const r = await call(empty)
+  assert.equal(r.ok, false)
+  assert.equal(r.error.error.code, 'E_BRIDGE_SCRIPT_MISSING')
+  assert.match(r.error.error.message, /wiki_bridge\.py/)
 }
 
 // 3. 正常回话：stdin 收到的 JSON 要能被脚本读到，plugin_version 由插件补

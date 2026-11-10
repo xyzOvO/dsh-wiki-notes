@@ -38,3 +38,6 @@ governance.jsonl
 
 # tools/preview.mjs 的产物：静态预览页与截图
 preview/
+
+# 本机只读体检脚本：写死了本机库路径与本库的目录约定，只在作者机器上跑
+tests/local/_*.mjs

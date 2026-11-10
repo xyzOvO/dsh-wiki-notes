@@ -1,7 +1,8 @@
 {
   "version": "example",
   "library": "any",
-  "note": "示例评测集。真跑的时候复制成 queries.json 再按自己的库改——queries.json 含真实笔记主题，所以不进仓库。expect 写「必须进前 5 的页名」，由人标，不依赖任何旧引擎。",
+  "libraryFingerprint": "",
+  "note": "示例评测集。真跑的时候复制成 queries.json 再按自己的库改——queries.json 含真实笔记主题，所以不进仓库。expect 写「必须进前 5 的页名」，由人标，不依赖任何旧引擎。libraryFingerprint 留空是有意的：第一次跑 recall.mjs 会报 BASELINE_STALE 并打印当前库的内容指纹，把它填进来、再按那次实测标定 floor，写进 floorNote。这样 floor 才有参照系。",
   "floor": {
     "recallAt5": 0.0,
     "mrrAt5": 0.0,

@@ -5,7 +5,7 @@
  * 危险的失败是「存提示词时把路径抹了」或者反过来，所以这里专门钉这个。
  */
 
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
@@ -63,6 +63,21 @@ writeFileSync(path.join(dir, 'wiki-notes.config.json'), '{ 这不是 json', 'utf
 check('坏文件时 root 为空', readConfigFile(dir) === '', readConfigFile(dir))
 check('坏文件时提示词用默认', readPromptConfig(dir).enabled === true, JSON.stringify(readPromptConfig(dir)))
 
+// 5b. 覆盖坏文件之前必须留备份，否则「存一次设置」= 静默丢掉主题词/桥路径/提示词
+// 注意：此刻配置文件里还是上面那段坏 JSON，这里一次写操作会触发备份
+writePromptConfig(dir, { enabled: true, override: '要查。', extra: '' })
+const brokenCopy = path.join(dir, 'wiki-notes.config.json.broken')
+check('坏文件被覆盖前留了 .broken 备份', existsSync(brokenCopy), brokenCopy)
+check('备份内容是原来那段坏 JSON', readFileSync(brokenCopy, 'utf8') === '{ 这不是 json', readFileSync(brokenCopy, 'utf8'))
+check('覆盖后能正常读回', readPromptConfig(dir).override === '要查。', JSON.stringify(readPromptConfig(dir)))
+check('写入后不留下 .tmp', !existsSync(path.join(dir, 'wiki-notes.config.json.tmp')), '还留着 .tmp')
+
+// 5c. 正常文件不该产生备份（否则每次保存都堆一个 .broken）
+const before = existsSync(brokenCopy)
+writePromptConfig(dir, { enabled: true, override: '再查。', extra: '' })
+check('正常覆盖不新增 .broken', existsSync(brokenCopy) === before, '多出了一个备份')
+check('正常覆盖后内容已更新', readPromptConfig(dir).override === '再查。', JSON.stringify(readPromptConfig(dir)))
+
 // 6. 不认识的字段要保留（别人手写的注释性字段不该被吃掉）
 writeFileSync(path.join(dir, 'wiki-notes.config.json'), JSON.stringify({ root: 'D:/a', note: '手写的' }), 'utf8')
 writePromptConfig(dir, { enabled: true, override: '', extra: '' })
@@ -105,7 +120,14 @@ check('calls 配置：空对象走默认（开着、路径空）', callsEmpty.en
 const callsOff = normalizeCallsConfig({ enabled: false })
 check('calls 配置：enabled=false 才关', callsOff.enabled === false, JSON.stringify(callsOff))
 const callsTruthy = normalizeCallsConfig({ enabled: 'no' })
-check('calls 配置：非 false 的值不算关闭', callsTruthy.enabled === true, JSON.stringify(callsTruthy))
+// 字符串 "false" 是真值，按旧写法（raw.enabled !== false）会被读成「开」——
+// 想关掉观察反而打开了它，然后开始往账本里记东西。
+check('calls 配置：字符串 "false"/"no" 也算关闭', callsTruthy.enabled === false, JSON.stringify(callsTruthy))
+check('calls 配置：字符串 "yes" 算打开', normalizeCallsConfig({ enabled: 'yes' }).enabled === true)
+check('calls 配置：数字 0 算关闭', normalizeCallsConfig({ enabled: 0 }).enabled === false)
+check('calls 配置：认不出来的值走默认（开着）', normalizeCallsConfig({ enabled: 'maybe' }).enabled === true, JSON.stringify(normalizeCallsConfig({ enabled: 'maybe' })))
+check('提示词配置：合并时字符串 "false" 也关', mergePromptConfig({ enabled: true }, { enabled: 'false' }).enabled === false, JSON.stringify(mergePromptConfig({ enabled: true }, { enabled: 'false' })))
+check('提示词配置：没提到 enabled 时保持原值', mergePromptConfig({ enabled: false }, { extra: 'x' }).enabled === false)
 const callsLog = normalizeCallsConfig({ log: '  /tmp/x.jsonl  ' })
 check('calls 配置：log 去空白', callsLog.log === '/tmp/x.jsonl', JSON.stringify(callsLog))
 check('calls 配置：非对象返回 null', normalizeCallsConfig(null) === null && normalizeCallsConfig([1]) === null)

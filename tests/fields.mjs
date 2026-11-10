@@ -91,5 +91,22 @@ ok('命中落在 §元信息 时就返回它', picked.hits[0]?.section?.title ==
 ok('返回的片段确实含查询词', (picked.hits[0]?.section?.text ?? '').includes('向量检索'), JSON.stringify(picked.hits[0]?.section?.text ?? ''))
 rmSync(dir2, { recursive: true, force: true })
 
+
+// 5) 片段被截断时要能看出来：clip 只在真截断时补「…」，可原文自己也可能就带省略号，
+//    所以另给 chars / truncated —— 否则「表格只到一半」会被当成整节内容引用。
+const dir3 = mkdtempSync(join(tmpdir(), 'wn-trunc-'))
+mkdirSync(join(dir3, 'concepts'))
+const longBody = '甲乙丙丁戊己庚辛壬癸'.repeat(20)
+writeFileSync(
+  join(dir3, 'concepts', '长节页.md'),
+  ['---', '类型: 概念', '状态: 已提纯', '标签: [测试]', '更新: 2026-01-01', '---', '', '# 长节页', '', '## 定义', '', '短的一段。', '', '## 细节', '', longBody, ''].join('\n'),
+)
+const corpus3 = await loadCorpus(dir3)
+const cut = search(corpus3, '甲乙丙', { limit: 1, sectionChars: 120 })
+ok('截断时标 truncated', cut.hits[0]?.section?.truncated === true, JSON.stringify(cut.hits[0]?.section?.truncated))
+ok('截断时给全文长度', (cut.hits[0]?.section?.chars ?? 0) > String(cut.hits[0]?.section?.text ?? '').length, JSON.stringify([cut.hits[0]?.section?.chars, cut.hits[0]?.section?.text?.length]))
+const whole = search(corpus3, '短的一段', { limit: 1 })
+ok('没截断时 truncated=false', whole.hits[0]?.section?.truncated === false, JSON.stringify(whole.hits[0]?.section?.truncated))
+rmSync(dir3, { recursive: true, force: true })
 rmSync(dir, { recursive: true, force: true })
 console.log('\nfields smoke ' + (process.exitCode ? '有失败' : `全部通过（${pass} 项）`))

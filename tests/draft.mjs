@@ -116,4 +116,51 @@ const render = (args, value) => (tool.output.render(args, value)[0] ?? {}).text 
   })
 }
 
+/* --------------------------- 文件名安全（第四批）--------------------------- */
+
+ok('标题含文件名禁用字符时：路径改用替代名，带不出知识层', () => {
+  for (const bad of ['RAG: 取舍', '../../etc/passwd']) {
+    const value = draft(corpus, { title: bad, now: CROSS })
+    assert.ok(value.nameWarning, `缺少 nameWarning：${bad}`)
+    assert.ok(!/[\\/:*?"<>|]/.test(value.safeTitle), `替代名里仍禁用字符：${value.safeTitle}`)
+    // 斜杠是「路径」而不是「字符」：../../etc/passwd 曾原样生成 概念-concepts/../../etc/passwd.md
+    assert.ok(!value.file.split('/').includes('..'), `路径仍在穿越：${value.file}`)
+    assert.match(value.file, /^概念-concepts\/[^/]+\.md$/)
+  }
+})
+
+ok('标题正常时不产生多余的 nameWarning', () => {
+  const value = draft(corpus, { title: '普通标题', now: CROSS })
+  assert.equal(value.nameWarning, undefined)
+  assert.equal(value.safeTitle, undefined)
+})
+
+{
+  const value = await tool.execute({ mode: 'draft', title: 'RAG: 取舍' }, {})
+  const text = render({ mode: 'draft' }, value)
+  ok('renderDraft 把文件名问题印在骨架之后、frontmatter 之前', () => {
+    const lines = text.split('\n')
+    const at = lines.findIndex((line) => line.startsWith('⚠ 标题里的'))
+    assert.ok(at > 0, '渲染里没有 nameWarning 行')
+    assert.match(lines[at], /带出知识层/)
+    // 紧挨着「回写骨架」那行，人一眼就能对上是哪个路径有问题；但不能掉到 frontmatter 后面去
+    assert.ok(at > lines.findIndex((line) => line.startsWith('回写骨架')), '提醒排在了骨架前面')
+    assert.ok(at < lines.findIndex((line) => line === '---'), '提醒掉到了 frontmatter 后面')
+  })
+}
+
+ok('类型没有对应目录时给 typeWarning（别让类型与目录自相矛盾）', () => {
+  const value = draft(corpus, { title: '面试备忘', type: '备忘', now: CROSS })
+  assert.match(String(value.typeWarning), /没有对应目录/)
+  assert.match(String(value.typeWarning), /SKILL\.md/)
+  // 已知类型不该有这条
+  assert.equal(draft(corpus, { title: '面试备忘', type: '概念', now: CROSS }).typeWarning, undefined)
+})
+
+ok('来源数量只写非负整数（负数与小数不落盘）', () => {
+  assert.equal(draft(corpus, { title: '甲', now: CROSS, sources: -3 }).frontmatter.includes('来源数量: 0'), true)
+  assert.equal(draft(corpus, { title: '甲', now: CROSS, sources: 2.7 }).frontmatter.includes('来源数量: 2'), true)
+  assert.equal(draft(corpus, { title: '甲', now: CROSS, sources: '3' }).frontmatter.includes('来源数量: 3'), true)
+})
+
 console.log(`\n[draft] 全部通过（${passed} 项）`)

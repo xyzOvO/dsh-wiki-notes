@@ -8,7 +8,7 @@ import './support/quiet-ledger.mjs'
  */
 
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -534,5 +534,152 @@ ok('超长查询在引擎层就截到 200 字，不把整段当词元', () => {
   assert.equal(tokens.length, 1)
   assert.equal(tokens[0].length, 200)
 })
+
+ok('截断不切半个表情：孤立代理会让下游显示成「�」', () => {
+  // 199 个 ASCII + 1 个表情：第 200 个码元正好是表情的高位代理，旧写法切在这里
+  const tokens = tokenize(`${'a'.repeat(199)}😀😀`)
+  const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+  assert.equal(lone.test(tokens[0]), false, '词元里出现了孤立代理')
+  assert.ok(tokens[0].length <= 200)
+
+  // 命中小节正文的 sectionChars 截断同理
+  const page = { ...PAGE, sections: [{ title: '定义', text: '😀'.repeat(600) }], body: `## 定义\n\n${'😀'.repeat(600)}` }
+  const value = run(fakeCorpus({ pages: [page] }), { mode: 'search', query: '上下文', sectionChars: 901 })
+  assert.equal(lone.test(value.hits[0].section.text), false, '小节正文里出现了孤立代理')
+})
+
+ok('超大页取页：说「超过 512KB 未载入」，不说「文件是空的」', () => {
+  // 超大页的 body 也是空字符串，早先两条提示会同时出现且互相矛盾
+  const huge = { ...PAGE, oversized: true, body: '', sections: [] }
+  const value = run(fakeCorpus({ pages: [huge], stats: { oversized: 1 } }), { mode: 'page', name: PAGE.name })
+  assert.equal(value.status, 'partial')
+  assert.equal(value.note, undefined)
+  const joined = value.warnings.join(' ')
+  assert.match(joined, /超过 512KB/)
+  assert.doesNotMatch(joined, /文件是空的/)
+
+  // 真的是空页时仍要说清
+  const blank = { ...PAGE, body: '', sections: [] }
+  const value2 = run(fakeCorpus({ pages: [blank] }), { mode: 'page', name: PAGE.name })
+  assert.match(String(value2.note), /这页没有正文/)
+})
+
+/* --------------------- lint：「更新」读不出来的页 --------------------- */
+
+{
+  const dir = mkdtempSync(join(tmpdir(), 'wiki-notes-stale-'))
+  const fm = (date) => `---\n类型: 概念\n状态: 稳定\n标签: [x]\n别名: []\n来源数量: 1\n创建: 2020-01-01\n更新: ${date}\n---\n\n# 页\n\n正文。\n`
+  writeFileSync(join(dir, '好日期.md'), fm('2020-01-01'))
+  writeFileSync(join(dir, '坏日期.md'), fm('2020/01/01'))
+  const corpus = await loadCorpus(dir)
+  const value = run(corpus, { mode: 'lint' })
+
+  ok('「更新」不是 YYYY-MM-DD 的页：算不进久未更新，但必须单独报出来', () => {
+    assert.equal(value.counts.staleUnknown, 1, `staleUnknown=${value.counts.staleUnknown}`)
+    assert.equal(value.staleUnknown[0].name, '坏日期')
+    assert.equal(value.counts.stale, 1, '只有能算天数的那页该进 stale')
+    // 「0 页久未更新」不能冒充「全库都新」—— 有读不出的日期就得说出来
+    assert.equal(value.status, 'partial')
+    assert.match(value.warnings.join(' '), /不是 YYYY-MM-DD/)
+  })
+}
+
+/* ------------------ overview：没有总览页 ≠ 总览是空的 ------------------ */
+
+{
+  const head = { ...PAGE, name: '总览-overview', file: '总览-overview.md', fields: { 类型: '总览', 状态: '稳定', 更新: '2026-11-01' } }
+  const withOverview = run(fakeCorpus({ pages: [head, PAGE] }), { mode: 'overview' })
+  const noOverview = run(fakeCorpus({ pages: [PAGE] }), { mode: 'overview' })
+
+  ok('有总览页时 overview 正常（ok、无 note）', () => {
+    assert.equal(withOverview.status, 'ok')
+    assert.equal(withOverview.note, undefined)
+    assert.equal(withOverview.overview.name, '总览-overview')
+  })
+
+  ok('没有总览页时 overview 要说清「没有」，不能默默给个空', () => {
+    assert.equal(noOverview.overview, null)
+    assert.match(String(noOverview.note), /没有「总览-overview」页/)
+    assert.equal(noOverview.status, 'partial')
+    assert.match(noOverview.warnings.join(' '), /没有「总览-overview」页/)
+  })
+}
+
+/* ------------------ 链接目录：不跟，但要留痕 ------------------ */
+
+{
+  const base = mkdtempSync(join(tmpdir(), 'wiki-notes-link-'))
+  const wiki = join(base, 'wiki')
+  const outside = join(base, 'outside')
+  mkdirSync(wiki)
+  mkdirSync(outside)
+  writeFileSync(join(wiki, '正常页.md'), '---\n类型: 概念\n状态: 稳定\n更新: 2026-11-01\n---\n\n# 正常页\n\n正文。\n')
+  writeFileSync(join(outside, '外部页.md'), '# 外部页\n\n正文。\n')
+  // Windows 上建目录链接要管理员权限，但 junction 不用；Linux/macOS 用 dir
+  symlinkSync(outside, join(wiki, '链接目录'), process.platform === 'win32' ? 'junction' : 'dir')
+  const corpus = await loadCorpus(wiki)
+
+  ok('junction/symlink 不跟进去扫描（不重复、不成环）', () => {
+    assert.deepEqual(corpus.pages.map((page) => page.name), ['正常页'])
+  })
+
+  ok('跳过链接要留痕：linksSkipped + 名字都报出来', () => {
+    assert.equal(corpus.stats.linksSkipped, 1)
+    assert.deepEqual(corpus.stats.linkSkips, ['链接目录'])
+  })
+}
+
+// log.md 在、但一条记录也对不上格式：不能让「最近日志 0 条」冒充「最近没有改动」
+{
+  const base = mkdtempSync(join(tmpdir(), 'wiki-notes-log-'))
+  let seq = 0
+  const make = (logBody) => {
+    seq += 1
+    const dir = join(base, `v${seq}`)
+    mkdirSync(join(dir, '概念-concepts'), { recursive: true })
+    writeFileSync(join(dir, '总览-overview.md'), '---\n类型: 综合\n状态: 稳定\n标签: [x]\n更新: 2026-11-01\n---\n\n# 总览\n\n规模。\n')
+    writeFileSync(join(dir, '概念-concepts', '甲.md'), '---\n类型: 概念\n状态: 稳定\n标签: [x]\n更新: 2026-11-01\n---\n\n# 甲\n\n正文。\n')
+    writeFileSync(join(dir, 'index.md'), '# 索引\n\n- [[甲]]\n')
+    if (logBody !== null) writeFileSync(join(dir, 'log.md'), logBody)
+    return dir
+  }
+
+  const broken = run(await loadCorpus(make('# 我的日志\n\n- 今天写了点东西\n')), { mode: 'overview' })
+  ok('log 格式对不上：状态降 partial', () => assert.equal(broken.status, 'partial'))
+  ok('log 格式对不上：说清「格式没对上」而不是「没有改动」', () => {
+    const said = broken.warnings.join(' ')
+    assert.match(said, /没有一条符合「## \[日期\] 类型 \| 标题」/)
+    assert.match(said, /不代表库里最近没有改动/)
+  })
+  ok('log 格式对不上：logPresent 与 logEntries 分开报', () => {
+    assert.equal(broken.logPresent, true)
+    assert.equal(broken.logEntries, 0)
+  })
+
+  const normal = run(await loadCorpus(make('# 日志\n\n## [2026-11-01] ingest | 摄入甲\n- 改了 [[甲]]\n')), { mode: 'overview' })
+  ok('log 正常：不降级、解析出 1 条', () => {
+    assert.equal(normal.status, 'ok')
+    assert.equal(normal.logEntries, 1)
+  })
+
+  const missing = run(await loadCorpus(make(null)), { mode: 'overview' })
+  ok('没有 log.md：不报警（没有 ≠ 格式不对）', () => {
+    assert.equal(missing.status, 'ok')
+    assert.equal(missing.logPresent, false)
+  })
+
+  // 两个「看起来是空」同时成立时，两条都得报：以前两条 if 各自 return，
+  // 第二条被第一条吞掉 —— 状态还是 partial，但只交代了一件事。
+  const bothDir = make('# 我的日志\n\n- 今天写了点东西\n')
+  rmSync(join(bothDir, '总览-overview.md'), { force: true })
+  const both = run(await loadCorpus(bothDir), { mode: 'overview' })
+  ok('缺总览 + log 格式坏：状态仍是 partial', () => assert.equal(both.status, 'partial'))
+  ok('缺总览 + log 格式坏：两条警告都在，没互相吞掉', () => {
+    const said = both.warnings.join(' ')
+    assert.match(said, /没有「总览-overview」页/)
+    assert.match(said, /不代表库里最近没有改动/)
+    assert.equal(both.warnings.length, 2, JSON.stringify(both.warnings))
+  })
+}
 
 console.log(`\n[status] 全部通过（${passed} 项）`)

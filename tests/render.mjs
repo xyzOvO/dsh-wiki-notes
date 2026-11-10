@@ -87,4 +87,42 @@ ok('只有 code 没有 message 时不留下空破折号', () => {
   assert.ok(!text.includes('— '), `多印了空原因：${text}`)
 })
 
+
+// 命中片段被截断时要明说：clip 只在真截断时补「…」，而原文自己也可能以省略号结尾，
+// 模型只看正文分不出「整节」和「砍了一半的表格」。
+const hit = (extra) => ({
+  mode: 'search',
+  query: '甲',
+  hits: [{
+    name: '长节页', kind: 'note', type: '概念', status: '稳定', sources: 1, updated: '2026-01-05',
+    tags: [], aliases: [], score: 120, allTerms: true, gist: '要点', summary: '摘要',
+    section: { title: '细节', text: '甲'.repeat(120) + '…', chars: 2924, truncated: true },
+    citation: '← [[长节页]] §细节 → 概念-concepts/长节页.md',
+    brokenLinks: [], ...extra,
+  }],
+})
+
+ok('片段被截断时告诉模型去取整节', () => {
+  const text = textOf('wiki_recall', hit())
+  assert.match(text, /本节正文已截断/)
+  assert.match(text, /2924 字符/)
+  assert.match(text, /page 取「长节页」/)
+})
+
+ok('没截断时不多印这一行', () => {
+  const value = hit()
+  value.hits[0].section = { title: '细节', text: '甲'.repeat(120), chars: 120, truncated: false }
+  assert.ok(!textOf('wiki_recall', value).includes('本节正文已截断'))
+})
+
+// stats.resources 是「类型: 资料」的页数，不是原始资料份数。写成「N 份资料」
+// 会让模型把库里的原文数量报小四倍 —— renderOverview 早已改口径，lint 首行是漏网的。
+ok('lint 报告首行说「资料页 N 个」，不说「N 份资料」', () => {
+  const text = textOf('wiki_recall', {
+    mode: 'lint', stats: { pages: 3, resources: 2, scannedMs: 12 }, counts: {},
+  })
+  assert.match(text, /其中资料页 2 个/, `没标清是页数：${text}`)
+  assert.ok(!text.includes('份资料'), `首行仍用「份资料」口径：${text.split('\n')[0]}`)
+})
+
 console.log(`\n[render] 全部通过（${passed} 项）`)

@@ -253,6 +253,54 @@ check('/calls/clear 拒绝跨源写入', crossClear.status === 403, String(cross
 const crossCfg = await call('POST', '/calls/config', JSON.stringify({ enabled: false }), { origin: 'https://evil.example' })
 check('/calls/config 拒绝跨源写入', crossCfg.status === 403, String(crossCfg.status))
 
+// enabled 收到的字符串不能被读反：`"false"` 是真值，读成 true 就成了
+// 「想关掉观察，结果把它打开了」，而且打开之后再往账本里记东西。
+const strOff = await call('POST', '/calls/config', JSON.stringify({ enabled: 'false' }))
+check('/calls/config enabled="false" 回 enabled:false', strOff.json?.enabled === false, JSON.stringify(strOff.json))
+check('/calls/config enabled="false" 落盘也是 false', readCfg().calls?.enabled === false, String(readCfg().calls?.enabled))
+const strOn = await call('POST', '/calls/config', JSON.stringify({ enabled: 'yes' }))
+check('/calls/config enabled="yes" 回 enabled:true', strOn.json?.enabled === true, JSON.stringify(strOn.json))
+
+// /check 的两种「参数不对」：坏 JSON 不许退化成「测当前库」，指到文件要说清不是目录
+const checkBad = await call('POST', '/check', '{"root":')
+check('/check 坏 JSON 回 400', checkBad.status === 400, String(checkBad.status))
+const notDir = await call('POST', '/check', JSON.stringify({ root: path.join(wiki, '概念-concepts', '测试页.md') }))
+check('/check 指到文件时 ok:false', notDir.json?.ok === false, JSON.stringify(notDir.json))
+check('/check 指到文件时说清「不是目录」', String(notDir.json?.error ?? '').includes('不是一个目录'), String(notDir.json?.error))
+
+// 没配库时检索：是「请求缺配置」（400），不是「插件坏了」（500）。
+// 另起一个实例测：上面那个 apply 显式传了 root，走不到这条路径。
+{
+  let handler2 = null
+  const ctx2 = {
+    logger: { info() {}, warn() {} },
+    on() {},
+    webServer: { register: (definition) => { handler2 = definition.handler; return () => {} } },
+    tools: { register: () => () => {} },
+  }
+  // 先把配置文件删掉：上面 /save 已经写进 root，不然这个实例照样「已配置」
+  if (existsSync(configFile)) rmSync(configFile, { force: true })
+  apply(ctx2, {})
+  const ask = (route) => new Promise((resolve, reject) => {
+    const req = new EventEmitter()
+    req.method = 'GET'
+    req.url = `/api/wiki-notes${route}`
+    req.headers = {}
+    const timer = setTimeout(() => reject(new Error('超时')), 20000)
+    const res = { statusCode: 0, setHeader() {}, end(body) {
+      clearTimeout(timer)
+      let json = null
+      try { json = JSON.parse(body) } catch { /* 非 JSON */ }
+      resolve({ status: res.statusCode, json })
+    } }
+    handler2(req, res).catch(reject)
+    req.emit('end')
+  })
+  const unconfigured = await ask('/search?q=' + encodeURIComponent('上下文'))
+  check('未配置库时 /search 回 400（不是 500）', unconfigured.status === 400, String(unconfigured.status))
+  check('未配置库时给出配置指引', /还没配置知识库路径/.test(String(unconfigured.json?.error ?? '')), String(unconfigured.json?.error))
+}
+
 rmSync(wiki, { recursive: true, force: true })
 if (existsSync(configFile)) rmSync(configFile, { force: true })
 

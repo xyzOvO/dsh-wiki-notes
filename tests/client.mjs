@@ -510,4 +510,42 @@ for (const [label, needle] of [
 }
 console.log('✓ 治理面板：嵌入位置、数据来源、关闭提示与样式守卫')
 
+// ---- 检索面板的交互与可读性守卫 ----
+// 这几条都是「中文用户每天会撞上、但只在真浏览器里才疼」的地方：
+// 输入法组词时的回车、请求在飞时改词、兜底方式说错、读屏读不到结果。
+for (const [label, needle] of [
+  ['输入法组词时不吃回车', 'event.isComposing === true || event.keyCode === 229'],
+  ['组词中直接返回、不 preventDefault', 'if (composing) return'],
+  ['请求在飞也不丢新查询', '不再因为 busy 就丢弃新查询'],
+  ['兜底说了覆盖率就别说成「命中任一」', '已按字面覆盖率匹配（≥45%）'],
+  ['兜底分支要读 coverageFallback', 'result.coverageFallback === true'],
+  ['结果变化报给读屏', "'aria-live': 'polite'"],
+]) {
+  if (!source.includes(needle)) throw new Error(`缺少检索面板改进：${label}（找不到 ${needle}）`)
+}
+if (source.includes("trimmed === '' || busy")) throw new Error('busy 时仍会丢弃新查询：面板会显示旧结果配新输入')
+if (!source.includes('title: hit.name')) throw new Error('被省略号截断的页名没有 title，看不到全名')
+// 正文里出现一长串没有空格的英文 / URL 时，pre-wrap 不换行会把面板顶出横向滚动条
+if (!source.includes('overflow-wrap:anywhere')) throw new Error('.wn-hit-text 没有 overflow-wrap，长词会顶破面板')
+// stats.resources 数的是「类型: 资料」的页数，写成「N 份资料」会让人以为库里只有 N 份原文
+if (source.includes("+ ' 份资料'")) throw new Error('界面把资料页数说成了「份资料」：原始资料份数在每页的「来源数量」里')
+if (!source.includes('资料页 ')) throw new Error('空状态应把 resources 说成「资料页」')
+if (!source.includes('实时同步：')) throw new Error('「实时同步开/关」少了冒号，读起来像「同步开关」')
+// 页签不带 role/aria-selected 时，读屏软件只会念「按钮 概览」「按钮 调用记录」，
+// 听不出这是同一组里选一个、也听不出现在选的是哪个。
+if (!source.includes("role: 'tablist'")) throw new Error('两个页签没有 role="tablist"，读屏听不出这是一组')
+if (!source.includes("role: 'tab'")) throw new Error('页签按钮没有 role="tab"')
+if (!source.includes("'aria-selected': tab === 'overview'")) throw new Error('页签没把选中态报给读屏（aria-selected）')
+// 页签不是 .wn-btn，不单独给焦点环就等于「Tab 走过去什么也看不见」
+if (!source.includes('.wn-tab:focus-visible')) throw new Error('页签没有焦点环样式，键盘用户看不出焦点在哪')
+// --wn-faint（#8a7f6e）在白卡片上只有 3.87:1，低于 AA 的 4.5；它只该用来画装饰（点、▸），
+// 不该承载文字。承载文字的地方要用 --wn-muted（5.62:1）。
+for (const banned of ['.wn-calls-note{font-size:11.5px;color:var(--wn-faint)', '.wn-chip-dim .wn-chip-term{font-weight:500;color:var(--wn-faint)']) {
+  if (source.includes(banned)) throw new Error(`次要文字用了 --wn-faint（对比度不足 4.5:1）：${banned}`)
+}
+// 没配库时 stats 全是 0，界面若只写「库 0 页」，读起来像「库里什么都没有」
+if (!source.includes("lib.source === 'unset'")) throw new Error('空状态没区分「没配库」与「库是空的」')
+if (!source.includes('还没有配置知识库路径')) throw new Error('没配库时应直接说去填路径')
+console.log('✓ 检索面板：输入法、并发改词、兜底措辞、读屏与省略号')
+
 console.log('\nclient smoke 全部通过')

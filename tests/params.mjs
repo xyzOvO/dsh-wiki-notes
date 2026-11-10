@@ -7,13 +7,15 @@
 
 import { fileURLToPath } from 'node:url'
 import { loadCorpus } from '../lib/corpus.js'
-import { run } from '../lib/engine.js'
+import { run, validateArgs } from '../lib/engine.js'
 
 const SAMPLE = fileURLToPath(new URL('../examples/sample-wiki/', import.meta.url))
 const corpus = await loadCorpus(SAMPLE)
 
 let failed = 0
+let total = 0
 function check(name, ok, detail = '') {
+  total += 1
   if (ok) return
   failed += 1
   process.stderr.write(`  ✗ ${name}${detail ? ` — ${detail}` : ''}\n`)
@@ -35,8 +37,17 @@ check('sectionChars 下限 120', (lean.hits[0]?.section.text ?? '').length <= 12
 const overview = run(corpus, { mode: 'overview', logLimit: 999 })
 check('overview logLimit 上限 20', overview.recentLog.length <= 20, `得到 ${overview.recentLog.length}`)
 
+// 「空查询」和「查询切不出字」是两种输入，说法不能一样：
+// 前者是他漏了参数，后者是参数在、只是全是标点 —— 都回「query 为空」会让人反复检查自己漏了什么。
+const emptyQ = validateArgs('search', { query: '   ' })
+check('空查询说「query 为空」', String(emptyQ).includes('query 为空'), String(emptyQ))
+const punctQ = validateArgs('search', { query: '???!!!' })
+check('全标点查询不说「为空」', !String(punctQ).includes('query 为空'), String(punctQ))
+check('全标点查询说「切不出可检索的字」', String(punctQ).includes('切不出可检索的字'), String(punctQ))
+check('合法查询不报错', validateArgs('search', { query: '上下文' }) === null)
+
 if (failed > 0) {
   process.stderr.write(`params smoke 失败 ${failed} 项\n`)
   process.exit(1)
 }
-console.log('params smoke 全部通过（5 项边界）')
+console.log(`params smoke 全部通过（${total} 项边界）`)
