@@ -44,8 +44,8 @@
 
 | mode | 干什么 | 参数 |
 | --- | --- | --- |
-| `search`（默认） | 关键词 AND 检索 | `query`、`limit`（5，≤12）、`sectionChars`（900，≤3000） |
-| `page` | 按页名/别名取整页 | `name`、`pageChars`（6000） |
+| `search`（默认） | 关键词 AND 检索；`type` / `tags` / `status` 过滤在主路径和覆盖率兜底里都生效 | `query`、`type`、`tags`、`status`、`limit`（5，≤12）、`sectionChars`（900，≤3000） |
+| `page` | 按页名/别名取整页，或只取一节 | `name`、`section`（小节标题或 1-based 序号）、`pageChars`（6000） |
 | `list` | 按类型/标签/状态列目录 | `type`、`tags`、`status`、`limit`（40，≤200） |
 | `overview` | 总览 + 规模行 + 最近日志 + 健康计数 | `pageChars`（4000）、`logLimit`（5，≤20） |
 | `lint` | 库健康检查：孤儿页、断链名字、缺字段、别名冲突、久未更新、无出链、草稿、index 与磁盘不一致；**并和上次体检对比，报出新增与已修** | `limit`（8，≤40）、`staleDays`（120） |
@@ -55,6 +55,8 @@
 ```jsonc
 { "mode": "search", "query": "上下文 预算", "limit": 5 }
 ```
+
+`status` 按 frontmatter「状态」筛，取值是五档：`草稿` / `演进中` / `稳定` / `存疑` / `已归档`（`已归档` 记生命周期，与成熟度不同维度）。`page` 的 `section` 只认有标题的小节；页首无标题前言不按序号计入，找不到时返回 `no_match` 并列出现有小节，不会把整页正文混进来。
 
 每条命中带 `kind`（note / raw-summary / source）、`sources`（来源数，**证据强度的唯一可靠代理**）、`status`、`gist`、`section`（命中小节正文，不是 90 字片段）、`citation`（`← [[页名]] §小节 → 路径`）、`brokenLinks`（指向不存在页的双链 = 「库里没依据」的硬信号），以及 `updated` 后面的**距今天数**（超过 180 天标「可能已过时」——三年前的结论和上周的长得一样，模型需要这个信号）。`overview` 额外给三项健康信号：index 有磁盘无、磁盘有 index 无、跨目录重名。
 
@@ -69,7 +71,7 @@
 - `support` 说的是**知识够不够**（`sufficient` / `partial` / `insufficient`）。
 - `degraded` 说的是**引擎有没有坏**。它是布尔值，为真时说明某个检索通道挂了 —— 这时候不能把 `support` 当结论，那是拿不完整的检索结果下的判断。
 
-同时返回 `evidence`（证据页，含分级、支撑了哪个槽位）、`missing`（缺什么、为什么缺）、`conflicts`（冲突候选，**未裁决，别当成已确认的结论**）、`answer.contract_text`（给回答的约束：必须披露缺口、不得超出证据、引文须原文），以及一个 `context_id`。
+同时返回 `evidence`（证据页，含分级、支撑了哪个槽位）、`missing`（缺什么、为什么缺）、`conflicts`（冲突候选，**未裁决，别当成已确认的结论**）、`answer.contract_text`（给回答的约束：必须披露缺口、不得超出证据、引文须原文），以及一个 `context_id`。模型看到的渲染文本里，每张证据页最多再附 2 条原文引文（每条按槽位标注、裁到 220 字）；JSON 结构不变，引文仍是页面原文子串，不是插件替你概括的。
 
 ### `wiki_verify` —— 核验回答
 
@@ -95,7 +97,7 @@
 
 在设置页的「知识库」里切到第二个页签。模型和面板**每一次**查库都会记一行，回答的是「我这句问话，它到底查了没有、查到没有」。
 
-三格数字（今日调用 / 命中率 / 零命中）+ 一张表（时间 · 来源 · 工具 · 问题 · 命中 · 耗时）+ 筛选（全部 / 模型 / 面板、只看零命中）。页面每 2 秒自己刷新。
+三格数字（今日调用 / 命中率 / 零命中）+ 一张表（时间 · 来源 · 工具 · 模式 · 问题 · 命中 · 耗时 · 成败）+ 筛选（全部 / 模型 / 面板、只看零命中；选中项有高亮与 `aria-pressed`）。页面每 2 秒自己刷新；错误按 400 / 403 / 500 给出下一步并可重试。
 
 账本落在插件目录旁的 `calls.jsonl`（已在 `.gitignore` 里），只记 8 个字段：
 
@@ -158,6 +160,8 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 | 3 | `wiki-notes.config.json`（设置页写这里） |
 | 4 | `lib/config.js` 的 `DEFAULT_WIKI_ROOT`（默认空） |
 
+设置页改的路径写入第 3 层；若第 1 层 `config.root` 或第 2 层 `DSH_WIKI_ROOT` 正在覆盖，界面会明确提示「保存也盖不过它」，保存后也不会谎称「已保存并生效」。优先级本身保持不变。
+
 没配时工具会直接告诉你「还没配置知识库路径」，不会静默扫空目录。
 
 `wiki_context` / `wiki_verify` / `wiki_observe` 还需要一条 Python 通路（`bridge.python` + `bridge.toolsRoot`，后者是含 `wiki_bridge.py` 的目录）。没配或配错时这三个工具会明确报错，且**不会假装成「知识库里没有」**：
@@ -183,7 +187,7 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 ## 设置页
 
-设置 →「知识库」。状态栏圆点表示实时同步是否生效，三个数字是页面 / 资料 / 红链页，下面是路径卡片和 `测试 · 保存并生效 · 重新扫描`。一次没配过时，卡片会变成三步引导。
+设置 →「知识库」。状态栏圆点表示实时同步是否生效，三个数字是页面 / 资料页 / 红链页，下面是路径卡片和 `测试 · 保存并生效 · 重新扫描`。一次没配过时，卡片会变成三步引导。被 profile 的 `config.root` 或环境变量覆盖时，路径卡片会直接说明「保存改不动生效路径」；保存成功提示也会区分「已生效」与「已保存但仍被覆盖」。
 
 浏览器半侧走同源 HTTP `/api/wiki-notes/*`（`state` / `search` / `check` / `save` / `rescan`），不碰 RPC。
 
@@ -200,11 +204,11 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 - 页名、类型、总分，以及「只命中部分词」的标记（该条没命中全部查询词）；
 - **命中理由**：每个查询词一条徽章，主词加粗、明细灰字，例如 `上下文 · 页名 120 · 别名 50 · 正文 ×7 21`，未得分的词显示为「未命中」。悬停徽章有各通道的权重说明；
 - 该条命中的小节标题与正文（正文里出现过的查询词带淡黄底纹），末尾附 citation，右侧一个复制按钮 —— 把「哪句话支撑了这条」直接抄进对话里；
-- 查询降级成「命中任一」时，计数行旁边会黄字提示。
+- 查询降级成「命中任一」或「字面覆盖率兜底」时，计数行旁边会按实际路径分别黄字提示。
 
 **键盘**：输入框防抖 350ms（够 2 个字符才查），`Enter` 立刻查，`Esc` 清空，`↑`/`↓` 在结果里移动高亮并展开对应条目；任意位置按 `/` 或 `Ctrl/⌘ + K` 直接跳到输入框。查询进行中列表上方显示「检索中…」。输入框右边有「复制词」—— 查出来的说法常常要拿去别处再查一遍，省得重敲；citation 那行的复制按钮同理（键盘走过去会看到焦点框）。
 
-**覆盖统计**在设置页的状态卡下面：`发现 102 个文件 → 读到 95 页 / 677 个小节`，后面是总体积、跳过 / 读不了 / 超大未读 / 读取失败的计数（非 0 时标黄）、最新修改时间、本次扫描耗时，以及这次实际扫的目录（自动下钻过时它和配置里的路径不是同一个）。
+**覆盖统计**在设置页的状态卡下面：`发现 102 个文件 → 读到 95 页 / 677 个小节`，后面是总体积、跳过 / 读不了 / 超大未读 / 目录与 stat 失败的计数（非 0 时标黄）、最新修改时间、本次扫描耗时，以及这次实际扫的目录（自动下钻过时它和配置里的路径不是同一个）。
 
 没查之前不是一片空白：显示库的规模、同步开关，以及库里出现最多的几个标签 —— 点一下直接拿它当查询词，省得先想「该查什么」。查不到时也顺带报覆盖：`参与检索 95 页 / 677 个小节 · 跳过 7` ——「没命中」和「那几页根本没读」是两回事，面板得能分清。`discovered = pages + unreadable + skipped` 在 `tests/api.mjs` 里当恒等式断言，这几个数不是凑出来的。
 
@@ -232,9 +236,9 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 三条线分开看，别混成一个数字：
 
-- **对齐（parity）**：`tests/local/ab.mjs` 比的是「JS 引擎的前 5 是否覆盖 Python `search.py` 的前 5」，当前 **166/166，漏 0**；`tests/local/metrics.mjs` 比同一批槽位的集合与排序，Recall@5 100%、Jaccard 0.63，当硬门禁。两侧刻意保留少量已知分歧（疑问词剥离是有意改进、index 摘要 +8、类型层平局裁决），名单在本地 `tests/local/parity-exceptions.json`，**不入仓库**。
-- **质量（recall）**：`tests/local/recall.mjs` 跑人工标注的评测集，报 Recall@5 / Top-1 / MRR@5 并按标签分组。当前基线 **Recall@5 85.2% · Top-1 76.3% · MRR 0.819**（59 条查询 / 194 个槽位），低于基线即 exit 2。评测集 `tests/local/queries.json` 含真实笔记主题，**不入仓库**；仓库里只有中性 6 条的 `queries.example.json`。
-- **性能**：123 页扫一遍约 51ms，单条查询 4ms 上下；`tools/probe.mjs` 另攒一条 hit@1 / hit@3 / Recall@5 的趋势 CSV。
+- **对齐（parity）**：`tests/local/ab.mjs` 比的是「JS 引擎的前 5 是否覆盖 Python `search.py` 的前 5」；`tests/local/metrics.mjs` 比同一批槽位的集合与排序（Recall@5 / Top-1 一致率 / Jaccard），当硬门禁。两侧刻意保留少量已知分歧（疑问词剥离是有意改进、index 摘要 +8、类型层平局裁决），名单在本地 `tests/local/parity-exceptions.json`，**不入仓库**。
+- **质量（recall）**：`tests/local/recall.mjs` 跑人工标注的评测集，报 Recall@5 / Top-1 / MRR@5 并按标签分组。`queries.json` 里的 `floor` 与 `libraryFingerprint` 绑定：库内容变了要按规矩重导基线、把证据写进 `floorNote`，低于 floor 即 exit 2。评测集 `tests/local/queries.json` 含本机笔记主题，**不入仓库**；仓库里只有中性 6 条的 `queries.example.json`。
+- **性能**：基准数字随库规模与机器变化，用 `tools/probe.mjs` 在本机攒 hit@1 / hit@3 / Recall@5 的趋势 CSV；别把某一次读数写进文档当承诺。
 
 评分刻意朴素：标题全等 120 / 标题含 60 / 别名含 50 / 标签含 25 / 正文词频 ×3（封顶 36）/ index 摘要只在其它通道全 0 时补 8；同分再比类型层（综合 3 · 总览 3 / 概念·实体·对比 2 / 资料 1）→ 更新时间 → 码点序。四处经验细节：摘要分只补漏不抢位、同分用码点序（拼音序不可复现）、选节排除清单类与元讨论类小节、总览与综合同层（总览是全库唯一入口页，跨模块的词在它里面出现分量不同）。
 
@@ -279,9 +283,10 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 - 中文不分词，靠空格切分；连写词靠 `别名` 补。整句中文拿不到命中时会降级成字面覆盖率排序，那是**字面**匹配，语义相近但用词不同照样认不出。
 - 页名本身是查询词时，正文很少重复该词，选节可能偏。
-- 每次调用全量扫描；123 页约 51ms，再大一个数量级要上增量索引。
+- 每次调用全量扫描；具体耗时随库规模与机器变化，再大一个数量级要上增量索引。
 - 每命中一页要塞约 900 字符正文（`sectionChars` 可调），一次返回 5 页就是 4–5k 字符 —— 瓶颈常在上下文预算而不在检索速度。
-- **重启后第一次扫描是冷盘读**：95 页实测 5,217ms（此后 29ms）。插件启动就预热一次，所以这段延迟通常落在你还没提问的时候；但第一条查询正好赶上也确实要等。
+- `page` 的 `section` 只认有标题的小节：页首无标题前言按标题或序号都取不到，遇到它只能调大 `sectionChars`；`list` / `search` 也还没有 `dir` / `offset` 分页，超过 `limit` 上限的后半段要先按 `type` / `tags` / `status` 收窄。
+- **重启后第一次扫描是冷盘读**：具体耗时随库规模与磁盘变化，插件启动就预热一次，所以这段延迟通常落在你还没提问的时候；但第一条查询正好赶上也确实要等。
 - **面板没打开时 `/`、`Ctrl/⌘ + K` 不会有反应**：快捷键绑在面板上，而宿主的 `sidebarRightTabs` 只提供 `register()`，没有「打开 / 激活页签」的接口，插件没法从外面把面板叫出来。
 - **知识网关那套仍是两套实现**：JS 侧 `wiki_recall` 和 Python 侧 `wiki_context` 各自解析页面，差在结构解读层。统一方向未定。
 - **`unverifiable` 只在 `notices` 里**：模型若只看 `violations`，会漏掉「这个数字我核实不了」。
@@ -314,7 +319,7 @@ tests/support/  测试用小工具（quiet-ledger：把账本重定向到临时�
 ```
 
 ```bash
-npm test                                           # 跑样例库，不需要本地知识库（25 个文件）
+npm test                                           # 跑样例库，不需要本地知识库（29 个文件）
 node bin/cli.mjs search 上下文 --root=examples/sample-wiki
 WIKI_ROOT="/path/your/wiki" node tests/smoke.mjs   # 拿自己的库跑通就行（不校验答案）
 WIKI_ROOT="/path/your/wiki" node tests/local/recall.mjs   # 质量评测：Recall@5 / Top-1 / MRR（低于 floor 退 2）
@@ -331,9 +336,9 @@ node tools/preview.mjs --diag                      # 同上，并量一遍宽度
 WIKI_ROOT="/path/your/知识层-wiki" WIKI_TOOLS="/path/your/工具-tools" node tests/gateway.mjs
 ```
 
-发版：改 `version` → `npm test` 全绿（`scripts.test` 只串跑 `node tests/*.mjs`，25 个文件；`node --run test` 要 Node 22+，别在低版本上用它，也别拿它当门槛的证明）→ `npm pack --dry-run` 看一眼打包内容（`files` 只含 `lib`/`bin`/`docs`/`examples`/`README.md`/`CHANGELOG.md`/`LICENSE`/`cordis.patch.yml`，`preview/` 与 `tools/` 与 `tests/` 都不进包）→ **显式** `npm publish --registry=https://registry.npmjs.org/`。发布前先 `npm whoami --registry=https://registry.npmjs.org/` 确认已登录（本机 token 在 `.npmrc` 的 `//registry.npmjs.org/:_authToken=`；注意 `npm config get registry` 指向 npmmirror，而 npmmirror 那边不认这个 token，登录状态要显式指定 registry 去查）。发完要当场核三件事：`npm view <pkg>@<ver> dist.tarball` 取回的地址（带 fresh cache 与 REST cachebust）、下载 tarball 对 SHA256、`gh release view` 的 `isLatest`（注意它不能直接 `--json isLatest`）。
+发版：改 `version` → `npm test` 全绿（`scripts.test` 只串跑 `node tests/*.mjs`，29 个文件；`node --run test` 要 Node 22+，别在低版本上用它，也别拿它当门槛的证明）→ `npm pack --dry-run` 看一眼打包内容（`files` 只含 `lib`/`bin`/`docs`/`examples`/`README.md`/`CHANGELOG.md`/`LICENSE`/`cordis.patch.yml`，`preview/` 与 `tools/` 与 `tests/` 都不进包）→ **显式** `npm publish --registry=https://registry.npmjs.org/`。发布前先 `npm whoami --registry=https://registry.npmjs.org/` 确认已登录（本机 token 在 `.npmrc` 的 `//registry.npmjs.org/:_authToken=`；注意 `npm config get registry` 指向 npmmirror，而 npmmirror 那边不认这个 token，登录状态要显式指定 registry 去查）。发完要当场核三件事：`npm view <pkg>@<ver> dist.tarball` 取回的地址（带 fresh cache 与 REST cachebust）、下载 tarball 对 SHA256、`gh release list` 里该版本是不是 Latest（`gh release view --json isLatest` 不是可用字段）。
 
-打包进了你的笔记标题怎么办：`tests/local/` 的 query 集、分歧白名单、回归基线与 `calls.jsonl` / `governance.jsonl` / `probe-history.csv` 都在 `.gitignore` 里，只在本机跑。发版前用 `git diff --cached | Select-String '<你的用户名>|<你的库路径>|<真实页名>'` 过一遍暂存区，命中就改口径再提交。
+打包进了你的笔记标题怎么办：`tests/local/` 的 query 集、分歧白名单、回归基线与 `calls.jsonl` / `governance.jsonl` / `probe-history.csv` 都在 `.gitignore` 里，只在本机跑；`tests/local/_*.mjs` 这类写死本机路径的只读体检脚本也一样。发版前用 `git diff --cached | grep -E '<用户名>|<库路径>|<真实页名>'` 过一遍暂存区，再解包 `npm pack` 产物逐文件扫一遍；命中就改口径再提交。
 
 改样式的两条经验：
 

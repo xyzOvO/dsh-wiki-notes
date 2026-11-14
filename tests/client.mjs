@@ -546,6 +546,20 @@ for (const banned of ['.wn-calls-note{font-size:11.5px;color:var(--wn-faint)', '
 // 没配库时 stats 全是 0，界面若只写「库 0 页」，读起来像「库里什么都没有」
 if (!source.includes("lib.source === 'unset'")) throw new Error('空状态没区分「没配库」与「库是空的」')
 if (!source.includes('还没有配置知识库路径')) throw new Error('没配库时应直接说去填路径')
+for (const [label, needle] of [
+  ['inline config.root 覆盖警告', '插件 profile 里的 config.root 正在覆盖'],
+  ['保存时不再谎称生效', '已保存，但当前生效路径仍被'],
+  ['调用页错误按状态分流', 'function callsErrorHint(status)'],
+  ['调用页错误条改用已有样式', 'wn-notice-err'],
+  ['筛选选中态补样式', '.wn-btn.wn-btn-on{'],
+  ['筛选选中态报给读屏', "'aria-pressed': filter === item[0]"],
+  ['调用页补「模式」列', "h('th', null, '模式')"],
+  ['调用页补「成败」列', "h('th', null, '成败')"],
+  ['失败可重试', "'重试'"],
+]) {
+  if (!source.includes(needle)) throw new Error(`缺少设置页/调用页改进：${label}（找不到 ${needle}）`)
+}
+if (source.includes('wn-notice-bad')) throw new Error('调用页错误条仍在用没有样式的 wn-notice-bad')
 console.log('✓ 检索面板：输入法、并发改词、兜底措辞、读屏与省略号')
 
 console.log('\nclient smoke 全部通过')

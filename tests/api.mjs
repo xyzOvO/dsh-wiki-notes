@@ -187,6 +187,8 @@ check('/state 带 newestMtime / scannedAt（ISO 字符串）',
   JSON.stringify({ newestMtime: cov.newestMtime, scannedAt: cov.scannedAt }))
 check('/state 的 discovered = pages + unreadable + skipped',
   cov.discovered === cov.pages + cov.unreadable + cov.skipped, JSON.stringify(cov))
+check('/state 带 failuresTotal（覆盖诊断不再读死字段）',
+  Number.isInteger(cov.failuresTotal), JSON.stringify(cov.failuresTotal))
 
 // 查询诊断：面板要看每个词在多少页上有分
 const diag = await call('GET', `/search?q=${encodeURIComponent('测试 不存在的词')}`)

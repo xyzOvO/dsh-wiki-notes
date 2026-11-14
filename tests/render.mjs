@@ -107,12 +107,22 @@ ok('片段被截断时告诉模型去取整节', () => {
   assert.match(text, /本节正文已截断/)
   assert.match(text, /2924 字符/)
   assert.match(text, /page 取「长节页」/)
+  assert.match(text, /带 section：「细节」/, '截断提示没有把小节名一起给出来，照它再查一次仍是整页')
 })
 
 ok('没截断时不多印这一行', () => {
   const value = hit()
   value.hits[0].section = { title: '细节', text: '甲'.repeat(120), chars: 120, truncated: false }
   assert.ok(!textOf('wiki_recall', value).includes('本节正文已截断'))
+})
+
+ok('无标题节被截断时不给「section：「」」这种照做取不到的提示', () => {
+  const value = hit()
+  value.hits[0].section = { title: '', text: '甲'.repeat(120) + '…', chars: 2924, truncated: true }
+  const text = textOf('wiki_recall', value)
+  assert.ok(!text.includes('section：「」'), '空标题不该拼成死链提示')
+  assert.match(text, /这一节没有标题/)
+  assert.match(text, /sectionChars/, '要告诉模型这一节只能靠加大片段长度解决')
 })
 
 // stats.resources 是「类型: 资料」的页数，不是原始资料份数。写成「N 份资料」
@@ -123,6 +133,68 @@ ok('lint 报告首行说「资料页 N 个」，不说「N 份资料」', () => 
   })
   assert.match(text, /其中资料页 2 个/, `没标清是页数：${text}`)
   assert.ok(!text.includes('份资料'), `首行仍用「份资料」口径：${text.split('\n')[0]}`)
+})
+
+ok('深度上下文把证据原文片段露出来（不再只剩 slot）', () => {
+  const text = textOf('wiki_context', {
+    kind: 'context',
+    query: '甲',
+    status: { retrieval: 'ok', support: 'supported', stage: 'ok' },
+    answer: { constraints: {}, contract_text: '' },
+    evidence: [{
+      title: '甲', page: '概念-concepts/甲.md', evidence_grade: 'Direct',
+      supports: [
+        { slot: 'definition', quote: '甲是一段必须原样呈现的引文，不能被概括成别的话。' },
+        { slot: 'numeric', quote: '第二条引文。' },
+        { slot: 'steps', quote: '第三条不该出现，每页只露两条。' },
+      ],
+    }],
+    missing: [], unresolved: [], conflicts: [],
+  })
+  assert.match(text, /\[definition\]/)
+  assert.match(text, /甲是一段必须原样呈现的引文/)
+  assert.ok(!text.includes('第三条不该出现'), '每页限 2 条 quote 没生效')
+})
+
+ok('page 取单节时标出当前小节，并把节名带进引用', () => {
+  const text = textOf('wiki_recall', {
+    mode: 'page',
+    status: 'ok',
+    found: {
+      name: '甲', type: '概念', status: '稳定', sections: ['定义', '细节'],
+      sectionTitle: '细节', sectionNote: '', body: '细节正文。', truncated: false,
+      citation: '← [[甲]] §细节 → 概念-concepts/甲.md', file: '概念-concepts/甲.md',
+    },
+  })
+  assert.match(text, /当前小节：细节/)
+  assert.match(text, /细节正文。/)
+  assert.match(text, /§细节/)
+})
+
+ok('page 找不到这一节时明说并列出可选小节', () => {
+  const text = textOf('wiki_recall', {
+    mode: 'page', status: 'ok',
+    found: {
+      name: '甲', sections: ['定义', '细节'],
+      sectionNote: '没有这一节：xyz。这页的小节是 定义 / 细节；可用小节标题或 1-based 序号再查一次。',
+      body: '', truncated: false, citation: 'x', file: 'x.md',
+    },
+  })
+  assert.match(text, /没有这一节：xyz/)
+  assert.match(text, /定义 \/ 细节/)
+})
+
+ok('小节未命中时状态不是 ok，原因仍可见且只印一遍', () => {
+  const text = textOf('wiki_recall', {
+    mode: 'page', status: 'no_match', warnings: [],
+    found: {
+      name: '甲', sections: ['定义'],
+      sectionNote: '没有这一节：xyz。这页的小节是 定义；可用小节标题或 1-based 序号再查一次。',
+      body: '', truncated: false, citation: 'x', file: 'x.md',
+    },
+  })
+  assert.match(text, /没有这一节：xyz/)
+  assert.equal((text.match(/没有这一节/g) ?? []).length, 1, '原因被印了两遍')
 })
 
 console.log(`\n[render] 全部通过（${passed} 项）`)

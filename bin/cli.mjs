@@ -56,7 +56,7 @@ async function main() {
   const t0 = Date.now()
   const corpus = await loadCorpus(root)
   const loadMs = Date.now() - t0
-  process.stderr.write(`[扫描] ${corpus.stats.pages} 页 / ${corpus.stats.resources} 资料 / ${corpus.stats.brokenPages} 页有断链 / ${loadMs}ms / root=${root}\n`)
+  process.stderr.write(`[扫描] ${corpus.stats.pages} 页 / 其中资料页 ${corpus.stats.resources} 个 / ${corpus.stats.brokenPages} 页有断链 / ${loadMs}ms / root=${root}\n`)
 
   if (command === 'bench') {
     const queries = ['上下文 工程', '记忆 系统', '检索 增强', '微调', '证据 分级', '窗口']
@@ -70,7 +70,7 @@ async function main() {
   }
 
   const started = Date.now()
-  const result = run(corpus, { mode: command, query: positional[0], name: positional[0], type: flags.type, tags: flags.tags, limit: flags.limit, pageChars: flags.chars })
+  const result = run(corpus, { mode: command, query: positional[0], name: positional[0], type: flags.type, tags: flags.tags, status: flags.status, section: flags.section, limit: flags.limit, pageChars: flags.chars })
   const queryMs = Date.now() - started
   process.stderr.write(`[查询] ${queryMs}ms\n`)
   console.log(JSON.stringify(result, null, 2))

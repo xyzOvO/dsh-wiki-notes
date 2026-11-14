@@ -1,6 +1,6 @@
 {
   "name": "dsh-wiki-notes",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "type": "module",
   "description": "Read-only knowledge gateway over a local Markdown vault for DeepSeek Harness — recall, evidence pack, answer verification, call audit | 本地 Markdown 笔记库的只读知识网关：检索、证据包、核验、调用审计",
   "keywords": [

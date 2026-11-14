@@ -12,7 +12,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { decideStatus, freshnessOf, list, run, tokenize } from '../lib/engine.js'
+import { decideStatus, freshnessOf, list, page, run, tokenize } from '../lib/engine.js'
 import { classifyFsError, loadCorpus } from '../lib/corpus.js'
 import { apply } from '../lib/index.js'
 
@@ -74,6 +74,15 @@ const PAGE = {
   body: '# 上下文工程\n\n## 定义\n\n上下文工程说的是怎么把有限预算花在刀刃上。',
   links: [],
   oversized: false,
+}
+
+const SECTION_PAGE = {
+  ...PAGE,
+  sections: [
+    { title: '定义', text: '上下文工程说的是怎么把有限预算花在刀刃上。' },
+    { title: '细节', text: '细节正文第一句。细节正文第二句。' },
+  ],
+  body: '# 上下文工程\n\n## 定义\n\n上下文工程说的是怎么把有限预算花在刀刃上。\n\n## 细节\n\n细节正文第一句。细节正文第二句。',
 }
 
 /* ------------------------------ 正常路径 ------------------------------ */
@@ -283,7 +292,8 @@ ok('文件级恒等式：discovered = pages + unreadable + skipped', () => {
     corpus.stats.pages + corpus.stats.unreadable + corpus.stats.skipped,
     `discovered=${corpus.stats.discovered} pages=${corpus.stats.pages} unreadable=${corpus.stats.unreadable} skipped=${corpus.stats.skipped}`,
   )
-  assert.equal(corpus.stats.failuresTotal, corpus.stats.failures.length + corpus.stats.statFailures)
+  // failures 已经含 walk/stat/read/parse，stat 不能再加一遍
+  assert.equal(corpus.stats.failuresTotal, corpus.stats.failures.length)
 })
 
 ok('样例库本身是 ok（没有覆盖缺口）', () => {
@@ -681,5 +691,63 @@ ok('超大页取页：说「超过 512KB 未载入」，不说「文件是空的
     assert.equal(both.warnings.length, 2, JSON.stringify(both.warnings))
   })
 }
+
+ok('search 传 status：不匹配的页不参与，不是静默忽略', () => {
+  const bad = run(fakeCorpus({ pages: [PAGE] }), { mode: 'search', query: '上下文', status: '绝不存在的状态' })
+  assert.equal(bad.total, 0)
+  assert.equal(bad.considered, 0)
+  assert.match(String(bad.note ?? ''), /过滤条件的问题/)
+  assert.match(String(bad.note ?? ''), /status=/)
+  const good = run(fakeCorpus({ pages: [PAGE] }), { mode: 'search', query: '上下文', status: '已提纯' })
+  assert.equal(good.total, 1)
+})
+
+ok('page(section=标题) 只回那一节，citation 指到该节', () => {
+  const result = page(fakeCorpus({ pages: [SECTION_PAGE] }), '上下文工程', { section: '细节' })
+  assert.equal(result.found.sectionTitle, '细节')
+  assert.match(result.found.body, /细节正文第一句/)
+  assert.ok(!result.found.body.includes('上下文工程说的是'), '取单节时把整页搬回来了')
+  assert.match(result.found.citation, /§细节/)
+})
+
+ok('page(section=序号) 也认；找不到时列出可选小节', () => {
+  const corpus2 = fakeCorpus({ pages: [SECTION_PAGE] })
+  assert.equal(page(corpus2, '上下文工程', { section: '1' }).found.sectionTitle, '定义')
+  const miss = page(corpus2, '上下文工程', { section: '没有这节' })
+  // 原因放在 found.sectionNote（渲染器在正文前印一行 ⚠️），不再拼进顶层 note，
+  // 否则同一句话会在「⚠️ note」和「⚠️ sectionNote」里各印一遍。
+  assert.match(String(miss.found.sectionNote ?? ''), /没有这一节/)
+  assert.match(String(miss.found.sectionNote ?? ''), /定义 \/ 细节/)
+})
+
+ok('page 不带 section 时行为不变（整页）', () => {
+  const result = page(fakeCorpus({ pages: [SECTION_PAGE] }), '上下文工程')
+  assert.equal(result.found.sectionTitle, '')
+  assert.match(result.found.body, /上下文工程说的是/)
+})
+
+// splitSections 把 H1 前言留成 { title: '' } 的第一节；界面列出的「小节」不含它，
+// 所以 1-based 序号必须按「有标题的节」算，否则 section:'1' 会把前言交出去。
+ok('section 序号跳过无标题前言；找不到小节不退整页也不说成 ok', () => {
+  const withPreamble = {
+    ...PAGE,
+    sections: [
+      { title: '', text: '# 上下文工程\n\n前言里有一句不该被当成第一节。' },
+      { title: '定义', text: '上下文工程说的是怎么把有限预算花在刀刃上。' },
+      { title: '细节', text: '细节正文第一句。细节正文第二句。' },
+    ],
+  }
+  const corpus3 = fakeCorpus({ pages: [withPreamble] })
+  const first = page(corpus3, '上下文工程', { section: '1' })
+  assert.equal(first.found.sectionTitle, '定义')
+  assert.match(first.found.body, /上下文工程说的是/)
+  assert.ok(!first.found.body.includes('前言里有'), '把无标题前言当成了第 1 节')
+  assert.equal(page(corpus3, '上下文工程', { section: '2' }).found.sectionTitle, '细节')
+  const miss = page(corpus3, '上下文工程', { section: '没有这节' })
+  assert.equal(miss.found.body, '', '找不到小节时又把整页正文搬回来了')
+  assert.match(String(miss.found.sectionNote ?? ''), /定义 \/ 细节/)
+  assert.equal(miss.note, undefined, '「没有这一节」和「整页没正文」不该同时出现在 note 里')
+  assert.equal(run(corpus3, { mode: 'page', name: '上下文工程', section: '没有这节' }).status, 'no_match')
+})
 
 console.log(`\n[status] 全部通过（${passed} 项）`)

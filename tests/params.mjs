@@ -6,6 +6,7 @@
  */
 
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
 import { loadCorpus } from '../lib/corpus.js'
 import { run, validateArgs } from '../lib/engine.js'
 
@@ -45,6 +46,17 @@ const punctQ = validateArgs('search', { query: '???!!!' })
 check('全标点查询不说「为空」', !String(punctQ).includes('query 为空'), String(punctQ))
 check('全标点查询说「切不出可检索的字」', String(punctQ).includes('切不出可检索的字'), String(punctQ))
 check('合法查询不报错', validateArgs('search', { query: '上下文' }) === null)
+
+// status 是 schema 里声明过的参数：search 不能像以前那样静默忽略它
+const statusNone = run(corpus, { mode: 'search', query: '上下文', status: '绝不存在的状态' })
+check('search 传不存在的 status：结果为空且说明是过滤条件', statusNone.total === 0 && String(statusNone.note ?? '').includes('过滤条件'), JSON.stringify({ total: statusNone.total, note: statusNone.note }))
+const statusHit = run(corpus, { mode: 'search', query: '上下文', status: '稳定' })
+check('search 传真实 status：仍能命中', statusHit.total > 0, JSON.stringify(statusHit.total))
+const engineSrc = readFileSync(new URL('../lib/engine.js', import.meta.url), 'utf8')
+check('字面覆盖率兜底也带 statusFilter（签名与调用）',
+  engineSrc.includes('{ typeFilter, tagFilter, statusFilter = null }') && engineSrc.includes('coveragePass(corpus, tokens, { typeFilter, tagFilter, statusFilter })'))
+check('coveragePass 主循环按状态筛（降级路径不漏页）',
+  engineSrc.includes("if (statusFilter !== null && String(page.fields['状态'] ?? '') !== statusFilter) continue"))
 
 if (failed > 0) {
   process.stderr.write(`params smoke 失败 ${failed} 项\n`)
