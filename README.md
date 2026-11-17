@@ -469,7 +469,9 @@ WIKI_ROOT="/path/your/知识层-wiki" WIKI_TOOLS="/path/your/工具-tools" node 
 
 **机器本地产物，靠 `.gitignore` 挡**：`calls.jsonl`（调用账本）、`visits.jsonl`（访问账本，1.8.3 后已停用）、`governance.jsonl`（观察事件）、`wiki-notes.config.json`（本机库路径）、`preview/`（预览产物）、`tests/local/`（含真实页名的回归基线）。
 
-> `visits.jsonl` 曾经被误提交过一版（63 行真实页名），后来用 `git rm --cached` 撤出跟踪。**它仍留在 `b5ecf2f` 那次提交的历史里** —— 要不要改写历史（`git filter-repo` + force push，所有 tag 与克隆都会变）是仓库所有者的决定，不自动做。
+> `visits.jsonl` 曾经被误提交过一版（63 行真实页名），先用 `git rm --cached` 撤出跟踪，随后在 2026-11-17 用 `git filter-repo --path visits.jsonl --invert-paths` 把它从**全部历史**里抹掉了：现在任何 ref 都不含这个文件，代价是 `main` 与 `v1.8.3`–`v1.11.2` 这 9 个 tag 的提交号全部改变（更早的 tag 不受影响）。
+>
+> 由此产生的两件事：**旧的克隆会与新历史分叉**，需要重新 clone；文档里 1.8.3 之后引用过的短提交号，对应的是已经不存在的提交（对照表见 CHANGELOG `## 1.11.3`）。GitHub 侧可能仍按旧对象 SHA 暂存一段时间，直到它自己的 GC 跑过。
 
 **默认值，`.gitignore` 挡不住**，只能靠看：默认库路径、默认查询词、默认示例、默认夹具里的标签名、`package.json` 的 `description`、工具说明 `DESCRIPTION`。这些「长得像正常代码」，所以每次发版都拿 `grep` 扫一遍：
 
