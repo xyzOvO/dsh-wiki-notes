@@ -547,6 +547,8 @@ for (const [label, needle] of [
   ['/calls 返回体的 governance 进 state', 'governance: data && data.governance'],
   ['关闭勾选框旁写明破坏性清空', '关闭会清空现有记录与待核验状态，期间指标不可用'],
   ['治理面板样式', '.wn-gov{'],
+  // 分组行只许缩内边距：缩外框（margin-left）会把右边界一起推走，数字就对不齐上面三行。
+  ['分组行不缩外框', '.wn-gov-row.wn-gov-sub{margin-left:0;padding-left:26px;'],
   ['关闭提示样式', '.wn-calls-warn{'],
 ]) {
   if (!source.includes(needle)) throw new Error(`缺少治理面板实现：${label}（找不到 ${needle}）`)

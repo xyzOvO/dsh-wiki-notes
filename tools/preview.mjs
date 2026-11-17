@@ -101,6 +101,40 @@ const ATTRS = {
   'aria-describedby': 'aria-describedby',
   maxLength: 'maxlength',
   rows: 'rows',
+  // SVG 属性：不写进这张表就等于没画 —— 白名单只放行表里有的键。
+  // 之前左栏那本书是空的，就是因为 stroke / d / viewBox 全被丢掉了。
+  viewBox: 'viewBox',
+  xmlns: 'xmlns',
+  width: 'width',
+  height: 'height',
+  d: 'd',
+  fill: 'fill',
+  'fill-rule': 'fill-rule',
+  fillRule: 'fill-rule',
+  stroke: 'stroke',
+  'stroke-width': 'stroke-width',
+  strokeWidth: 'stroke-width',
+  'stroke-linecap': 'stroke-linecap',
+  strokeLinecap: 'stroke-linecap',
+  'stroke-linejoin': 'stroke-linejoin',
+  strokeLinejoin: 'stroke-linejoin',
+  'stroke-miterlimit': 'stroke-miterlimit',
+  strokeMiterlimit: 'stroke-miterlimit',
+  opacity: 'opacity',
+  transform: 'transform',
+  points: 'points',
+  x: 'x',
+  y: 'y',
+  x1: 'x1',
+  x2: 'x2',
+  y1: 'y1',
+  y2: 'y2',
+  cx: 'cx',
+  cy: 'cy',
+  r: 'r',
+  rx: 'rx',
+  ry: 'ry',
+  role: 'role',
 }
 
 function escapeHtml(text) {
@@ -403,6 +437,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Micr
 .preview-surface{background:#fffdf8;border:1px solid #e3daca;border-radius:14px;padding:16px 18px;box-shadow:0 1px 2px rgba(31,28,24,.04);box-sizing:border-box;}
 .preview-settings{width:720px;min-width:0;}
 .preview-sidebar{width:368px;min-width:0;}
+.preview-page{display:flex;gap:10px;align-items:flex-start;}
+.preview-main{width:960px;min-width:0;}
+.preview-rail{display:flex;flex-direction:column;gap:4px;padding:8px;background:#fffdf8;border:1px solid #e3daca;border-radius:14px;box-shadow:0 1px 2px rgba(31,28,24,.04);}
+.preview-rail-item{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:9px;color:#4b6ef5;}
+.preview-rail-on{background:#e8eefc;}
+.preview-rail-ph{display:block;width:14px;height:14px;border-radius:4px;background:#e3daca;}
 ${css}
 </style></head>
 <body>${panels}${diagBlock}</body></html>`
@@ -463,6 +503,42 @@ function sidebarShell(h, preview, data, options) {
   )}</div>`
 }
 
+/**
+ * 左侧栏那本书点进去的整页：头 + 三页签 + 面板。
+ *
+ * 结构照抄 WikiPanel（`lib/client.js` 的 `PANEL_TABS` / `function WikiPanel`），
+ * 数据、文案、样式全部来自真组件与真样式表；只有最左边那条窄栏是这个场景的示意
+ * —— 它是 DSH 的 sidebar rail，不在本插件的 CSS 里，画不准就别假装准。
+ */
+function pageShell(h, preview, data, options) {
+  const opts = options || {}
+  const active = opts.tab || 'search'
+  const TAB_LABELS = [
+    ['search', '检索'],
+    ['status', '概览'],
+    ['calls', '调用记录'],
+  ]
+  const tabBar = `<div class="wn-tabs" role="tablist" aria-label="知识库分页">${TAB_LABELS.map(
+    (item) =>
+      `<button type="button" role="tab" aria-selected="${item[0] === active}" class="wn-tab${
+        item[0] === active ? ' wn-tab-on' : ''
+      }">${item[1]}</button>`,
+  ).join('')}</div>`
+  const body =
+    active === 'search'
+      ? panelShell(h, preview, data, { compact: false, query: opts.query })
+      : `<div class="wn-panel wn-panel-compact"><div class="wn-card"><div class="wn-card-head"><span class="wn-card-title">${
+          active === 'calls' ? '调用记录' : '概览'
+        }</span></div><div class="wn-dim">这个页签在静态预览里不展开 —— 它读的是 /calls 与 /state 的实时数据，写死一份就等于又画一张假的。</div></div></div>`
+  const book = preview && preview.WikiPanelIcon ? render(h(preview.WikiPanelIcon, { size: 18, active: true })) : ''
+  const rail = `<div class="preview-rail"><span class="preview-rail-item preview-rail-on">${book}</span><span class="preview-rail-item"><i class="preview-rail-ph"></i></span><span class="preview-rail-item"><i class="preview-rail-ph"></i></span></div>`
+  return `<div class="preview-page">${rail}<div class="preview-surface preview-main"><div class="wn-root wn-page">
+  <div class="wn-head"><div class="wn-title">知识库</div><div class="wn-sub">你自己查一遍：走的是同一次检索、同一本账，所以这里看到的命中理由，就是模型为什么会引用那条笔记。</div></div>
+  ${tabBar}
+  ${body}
+</div></div></div>`
+}
+
 /* ------------------------------ 主流程 ------------------------------ */
 
 const args = process.argv.slice(2)
@@ -479,22 +555,66 @@ const h = createElement
 const out = resolve(ROOT, arg('out', 'preview/panel.html'))
 
 const live = (await localSearch()) || (await liveHits())
-const sample = live || { hits: [], total: 0, considered: 0, elapsedMs: 0, scanned: 0 }
+// `--data <file>` 优先：文档里的介绍图必须用中性样例，不能让库里的真实页面名跟着截图出海。
+const dataArg = arg('data', '')
+const sample = dataArg !== '' ? JSON.parse(readFileSync(resolve(process.cwd(), dataArg), 'utf8')) : live || { hits: [], total: 0, considered: 0, elapsedMs: 0, scanned: 0 }
 const libState = (await localState()) || (await liveState())
 
-const panels = [
-  frame('设置页 · 有结果', 'preview-settings', panelShell(h, preview, sample, { open: 0, query: '上下文 预算' })),
-  frame('右侧栏 · 有结果', 'preview-sidebar', sidebarShell(h, preview, sample, { compact: true, query: '上下文 预算' })),
-  frame(
-    '右侧栏 · 键盘选中第 2 条',
-    'preview-sidebar',
-    sidebarShell(h, preview, sample, { compact: true, query: '上下文 预算', active: 1 }),
-  ),
-  frame('右侧栏 · 空状态', 'preview-sidebar', sidebarShell(h, preview, null, { compact: true, query: '', lib: libState })),
-  frame('设置页 · 空状态', 'preview-settings', panelShell(h, preview, null, { query: '', lib: libState })),
+// 预览里那个输入框显示的词：跟着样例走，别写死一个和结果对不上的。
+const QUERY = sample.query || '上下文 预算'
+
+// `--only page` 只出左侧栏那一页（文档截图用）；不给就出全部，方便改样式时一眼扫过去。
+// 每个 frame 记一个短名，别用中文标签当选择器 —— 标签是给人看的，会改。
+const frames = [
+  ['page', () => `<div class="preview-frame">${pageShell(h, preview, sample, { query: QUERY, tab: arg('tab', 'search') })}</div>`],
+  ['settings', () => frame('设置页 · 有结果', 'preview-settings', panelShell(h, preview, sample, { open: 0, query: QUERY }))],
+  ['sidebar', () => frame('右侧栏 · 有结果', 'preview-sidebar', sidebarShell(h, preview, sample, { compact: true, query: QUERY }))],
+  [
+    'sidebar-active',
+    () =>
+      frame(
+        '右侧栏 · 键盘选中第 2 条',
+        'preview-sidebar',
+        sidebarShell(h, preview, sample, { compact: true, query: QUERY, active: 1 }),
+      ),
+  ],
+  ['sidebar-empty', () => frame('右侧栏 · 空状态', 'preview-sidebar', sidebarShell(h, preview, null, { compact: true, query: '', lib: libState }))],
+  ['settings-empty', () => frame('设置页 · 空状态', 'preview-settings', panelShell(h, preview, null, { query: '', lib: libState }))],
+  [
+    'zero',
+    () =>
+      `<div class="preview-frame">${pageShell(
+        h,
+        preview,
+        {
+          mode: 'search',
+          query: '这个词库里没有',
+          tokens: ['这个词库里没有'],
+          termPages: [],
+          total: 0,
+          considered: sample.considered || 0,
+          elapsedMs: 12,
+          scanned: sample.scanned || 0,
+          hits: [],
+        },
+        { query: '这个词库里没有', tab: 'search' },
+      )}</div>`,
+  ],
 ]
+
+const only = arg('only', '')
+const chosen = only === '' ? frames : frames.filter((item) => item[0] === only)
+if (chosen.length === 0) {
+  console.error('没有这个 frame：' + only + '（可选：' + frames.map((item) => item[0]).join(' / ') + '）')
+  process.exit(2)
+}
+const panels = chosen.map((item) => item[1]())
 
 mkdirSync(dirname(out), { recursive: true })
 writeFileSync(out, page(css, panels.join('\n'), args.includes('--diag') ? DIAG : ''), 'utf8')
 console.log('预览已写出：' + out)
-console.log('数据来源：' + (live ? '本机引擎（' + sample.total + ' 条命中 / 扫描 ' + (sample.scanned || 0) + ' 页）' : '空（本机引擎与接口都没连上）'))
+console.log('数据来源：' + (dataArg !== ''
+  ? '样例文件 ' + dataArg + '（' + (sample.hits || []).length + ' 条命中 / 参与 ' + (sample.considered || 0) + ' 页）'
+  : live
+    ? '本机引擎（' + sample.total + ' 条命中 / 扫描 ' + (sample.scanned || 0) + ' 页）'
+    : '空（本机引擎与接口都没连上）'))
