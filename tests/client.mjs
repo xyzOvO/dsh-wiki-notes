@@ -721,8 +721,12 @@ const fakeState = {
     pages: { all: 12, searchable: 11, resources: 5, sections: 40, bytes: 921600 },
     index: { scannedAt: isoZ, scannedMs: 42, discovered: 12, skipped: 0 },
     problems: { brokenPages: 1, brokenTotal: 2, unreadable: 0, oversized: 1, duplicates: 0 },
-    tags: [{ tag: '示例标签', count: 3 }],
-    tagTotal: 1,
+    tags: [
+      { tag: '示例标签', count: 3, with: [{ tag: '相邻标签', count: 2 }] },
+      { tag: '相邻标签', count: 2, with: [{ tag: '示例标签', count: 2 }] },
+    ],
+    tagTotal: 2,
+    tagPages: { tagged: 9, untagged: 3 },
     relations: {
       links: 7,
       orphans: 2,
@@ -805,6 +809,46 @@ if (!shown.relations.includes('知识关系')) throw new Error('关系窗没画�
 if (!shown.relations.includes('枢纽页')) throw new Error('关系窗缺枢纽页')
 if (!shown.relations.includes('缺的那页')) throw new Error('关系窗缺断链目标')
 if (shown.relations.includes('可检索页面')) throw new Error('关系窗把首页的六块又抄了一遍')
+
+// 探索窗的两张子页各自还带一段：标签共现、页面关联。
+// 少了它们，「从标签走到相邻主题」「顺着链接走」这两件事就又没有入口了。
+for (const [label, tree, needle] of [
+  ['标签子页有共现', shown.exploreTags, '标签共现'],
+  ['标签子页报出没标签的页数', shown.exploreTags, '没标签'],
+  ['关系子页有页面关联', shown.exploreRelations, '页面关联'],
+]) {
+  if (!tree.includes(needle)) throw new Error(`探索窗缺件：${label}（找不到 ${needle}）`)
+}
+for (const [label, needle] of [
+  ['共现邻居拼成联合查询', "String(item.tag) + ' ' + String(partner.tag)"],
+  ['页面关联读 /links', "apiGet('/links?name='"],
+  ['关联行点一下顺着走', 'openLinks(item.name)'],
+  ['关联行能直接打开文件', 'openFile(item.file, item.name)'],
+]) {
+  if (!source.includes(needle)) throw new Error(`探索窗交互缺件：${label}（找不到 ${needle}）`)
+}
+console.log('✓ 探索窗：标签共现 + 页面关联（顺着链接走）')
+
+// 检索窗的「最近查过」：一排词点回去重查。只活在这次会话里 —— 落盘就成了第二本账。
+for (const [label, needle] of [
+  ['留几个词', 'var SEARCH_HISTORY_MAX = 8'],
+  ['查成功才记', 'setHistory(function (previous)'],
+  ['点一排词重查', "'wn-history'"],
+  ['同一句不重复堆', 'if (previous[i] !== trimmed) next.push(previous[i])'],
+]) {
+  if (!source.includes(needle)) throw new Error(`检索历史缺件：${label}（找不到 ${needle}）`)
+}
+console.log('✓ 检索窗：最近查过（会话内，不落盘）')
+
+// 「查看异常」不能只是切到探索窗 —— 上次停在标签页时，人会以为自己点错了。
+for (const [label, needle] of [
+  ['快捷操作有查看异常', "'查看异常'"],
+  ['异常点击走序号（连点两次也生效）', 'setAnomaly(anomaly + 1)'],
+  ['落到关系子页', "if (anomalyTick > 0) setExploreTab('relations')"],
+]) {
+  if (!source.includes(needle)) throw new Error(`查看异常缺件：${label}（找不到 ${needle}）`)
+}
+console.log('✓ 概览：查看异常直达关系页')
 // 标签 chips 是入口，不是装饰：点一下就该带着这个词跳去检索
 for (const [label, needle] of [
   ['标签可点（onPickTag）', 'props.onPickTag(String(item.tag))'],

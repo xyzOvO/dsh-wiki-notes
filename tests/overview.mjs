@@ -150,6 +150,55 @@ check('枢纽页带 inlinks 数字', (ov?.relations?.hubPages ?? []).every((item
 check('最该先补的页 = 不存在页', ov?.relations?.brokenTargets?.[0]?.name === '不存在页', JSON.stringify(ov?.relations?.brokenTargets))
 check('断链目标带出现次数', ov?.relations?.brokenTargets?.[0]?.count === 1, JSON.stringify(ov?.relations?.brokenTargets))
 
+// ---------- 6b. 页面关联（/links）+ 标签共现 ----------
+// 入链没有反向索引，只能逐页比。这一组钉的是「比出来的结果和概览里那套口径一致」。
+const links = await call('GET', '/links?name=' + encodeURIComponent('甲页'))
+check('/links 回 200', links.status === 200, String(links.status))
+check(
+  '/links 出链 = 乙页',
+  (links.json?.out ?? []).map((item) => item.name).join(',') === '乙页',
+  JSON.stringify(links.json?.out),
+)
+check(
+  '/links 出链带文件路径（能直接打开）',
+  (links.json?.out ?? []).every((item) => typeof item.file === 'string' && item.file !== ''),
+  JSON.stringify(links.json?.out),
+)
+// 乙页是用 [[甲别名]] 链回来的：别名解析必须和概览的入链同一套，否则这里会说「没人链它」。
+check(
+  '/links 入链 = 乙页（别名也算）',
+  (links.json?.inn ?? []).map((item) => item.name).join(',') === '乙页',
+  JSON.stringify(links.json?.inn),
+)
+check(
+  '/links 双向 = 乙页',
+  (links.json?.both ?? []).map((item) => item.name).join(',') === '乙页',
+  JSON.stringify(links.json?.both),
+)
+check('/links 红链去重后 1 个', (links.json?.broken ?? []).length === 1, JSON.stringify(links.json?.broken))
+check('/links 红链报出名字', links.json?.broken?.[0]?.name === '不存在页', JSON.stringify(links.json?.broken))
+check(
+  '/links 带 totals',
+  links.json?.totals?.out === 1 && links.json?.totals?.inn === 1 && links.json?.totals?.broken === 1,
+  JSON.stringify(links.json?.totals),
+)
+// 找不到页必须 404：回一个空的四列表会被读成「这页没有链接」，而真相是「这页不在库里」。
+const linksMiss = await call('GET', '/links?name=' + encodeURIComponent('查无此页'))
+check('/links 找不到页回 404（不是空四列）', linksMiss.status === 404, String(linksMiss.status))
+const linksNoName = await call('GET', '/links')
+check('/links 缺 name 回 400', linksNoName.status === 400, String(linksNoName.status))
+
+// 共现：甲页写 [测试, 标签A]、资料页只写 [测试] → 「测试」的邻居里有「标签A」，共同 1 页。
+const tagTest = byTag(ov?.tags, '测试')
+check('「测试」带共现邻居', Array.isArray(tagTest?.with) && tagTest.with.length >= 1, JSON.stringify(tagTest?.with))
+check('「测试」的邻居是「标签A」', tagTest?.with?.[0]?.tag === '标签A', JSON.stringify(tagTest?.with))
+check('共现数字是共同出现的页数', tagTest?.with?.[0]?.count === 1, JSON.stringify(tagTest?.with))
+check(
+  '有标签 4 页 / 没标签 0 页',
+  ov?.tagPages?.tagged === 4 && ov?.tagPages?.untagged === 0,
+  JSON.stringify(ov?.tagPages),
+)
+
 // ---------- 7. 「页面」那一窗连同两条路由一起撤了 ----------
 // 人读笔记是去自己的 markdown 编辑器：面板再给一份清单、再展开一次正文，
 // 只是把同一件事做第二遍。撤掉之后这两条路由必须真的没了（404 不是 200 空数组）。
