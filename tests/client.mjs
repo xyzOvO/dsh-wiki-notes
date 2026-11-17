@@ -636,6 +636,8 @@ for (const [label, needle] of [
   ['状态三态文案：不可用', '不可用'],
   ['读一页顺手刷新最近访问', "apiGet('/state', SCAN_TIMEOUT_MS)"],
   ['概览里不放路径输入框（只读）', '这一页只读'],
+  // 宿主是旧进程时 overview 缺席，数字只能是「—」。一句不解释，人只会以为库空了。
+  ['宿主没给 overview 时说明要重启', '重启一次 DSH'],
 ]) {
   if (!statusSrc.includes(needle)) throw new Error(`缺少概览实现：${label}（找不到 ${needle}）`)
 }
@@ -723,6 +725,13 @@ for (const [label, needle] of [
 }
 // 喂了 data 就不该显示「正在读库状态」——否则静态预览会被截成一张空态图
 if (overviewTree.includes('正在读库状态')) throw new Error('给了 data 仍在显示读取中')
+
+// 旧宿主的退化路径：有 data 但没有 overview，应该明说「要重启」，而不是排一排 0
+const staleTree = JSON.stringify(
+  previewApi.WikiPanelStatus({ data: { connection: 'connected', ok: true, root: 'D:/示例', stats: {}, visits: [] }, onSearch: function () {} }),
+)
+if (!staleTree.includes('重启一次 DSH')) throw new Error('宿主没给 overview 时没有说明要重启')
+if (!staleTree.includes('hx-stale')) throw new Error('退化提示没套样式，会混在正文里看不出来')
 console.log('✓ 概览组件：喂 /state 就出数，不自己算')
 
 console.log('\nclient smoke 全部通过')
