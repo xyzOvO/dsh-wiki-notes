@@ -26,6 +26,7 @@
 
 | 你想知道 | 直接跳 |
 | --- | --- |
+| 我连库都还没有 | [从零到能查](#从零到能查第一次用看这个) |
 | 这插件到底能干什么 | [四个工具](#四个工具) |
 | 左侧栏那本书点开是什么 | [知识库页（左侧栏）](#知识库页左侧栏) |
 | 我要先装上试试 | [装](#装) · [配](#配) |
@@ -35,6 +36,31 @@
 | 旧版本有没有遗留 | [发布物与残余风险](#发布物与残余风险) |
 | 已知毛病 | [已知局限](#已知局限) |
 | 要改代码 | [目录 / 开发](#目录--开发) |
+
+---
+
+## 从零到能查（第一次用看这个）
+
+一句话把分工说清楚：**插件只读。建库、维护、回写都由 AI 加你写下的规则做。**
+
+这个仓库带了一整套上手材料，不是只有代码：
+
+| 你要做的事 | 看哪儿 |
+| --- | --- |
+| 建一个库（让 AI 帮你搭） | [使用指南](docs/使用指南.md) §1–§3 + [P1 提示词](docs/prompts/p1-搭骨架.md) |
+| 给库立规矩 | [AGENTS.md 模板](docs/templates/AGENTS.md) —— 200 行，复制到库根就能用 |
+| 往里放资料 | [P3 摄入](docs/prompts/p3-摄入.md)（一次一两篇，重点是「整合」那一步） |
+| 定期体检 | [P4 体检](docs/prompts/p4-体检.md)（含「让 AI 给自己造工具」） |
+| 接上插件 | 本页 [装](#装) · [配](#配) |
+| 分享前脱敏 | [P6 脱敏](docs/prompts/p6-脱敏.md) |
+
+三条路，看你此刻在哪：
+
+- **连库都没有** → 读 [使用指南](docs/使用指南.md)，一小时走完前五节，第六节才轮到插件。
+- **已经有 Markdown 笔记** → 看 [库该长什么样](#库该长什么样)，字段补齐就能用；缺的规矩用 [AGENTS.md 模板](docs/templates/AGENTS.md) 补。
+- **只想先看看效果** → `node bin/cli.mjs search 菜刀 --root examples/flat-wiki`（随包的零结构示例库）。
+
+那份 200 行模板里最值钱的四样（细节见 [使用指南](docs/使用指南.md) §3）：**会话开场四步**（AI 如何接管一个陌生库）、**别名三条硬规则**（英文检索的唯一入口）、**状态四档与升档判据**（多数人只定档位不定怎么升，于是全停在草稿）、**边界六条**（永不改原始资料、永不物理删除、改动必记日志）。它比任何提示词都硬——它决定 AI 每天怎么对待你的库。
 
 ---
 
@@ -161,7 +187,7 @@ status · fallback · considered · warnings · topScore
 
 ## 库该长什么样
 
-**一个目录 + 一堆 `.md` 就能用。** 更细的约定见 [docs/库结构.md](docs/库结构.md)：frontmatter 七字段（英文写法 `title/type/tags/aliases/status/created/updated/sources` 也认）、`index.md` 摘要目录、`log.md` 时间线、`总览-overview.md`，满足得越多检索越准。可跑的样例在 [`examples/sample-wiki/`](examples/sample-wiki/)。
+**一个目录 + 一堆 `.md` 就能用。** 完整的字段与文件规格见 [使用指南 附录 B](docs/使用指南.md#附录-b--插件认的字段与文件规格速查)：frontmatter 七字段（英文写法 `title/type/tags/aliases/status/created/updated/sources` 也认）、`index.md` 摘要目录、`log.md` 时间线、`总览-overview.md`，满足得越多检索越准，缺了只是那一路加分失效、不报错。**推荐的完整结构长什么样、为什么要那么分，见 [使用指南](docs/使用指南.md) 第 1 节。** 可跑的样例：`examples/sample-wiki/`（6 页带索引）、`examples/demo-wiki/`（10 页带红链与别名）、`examples/flat-wiki/`（8 页平铺零字段）。
 
 路径指到上一层（比如 `我的库/`，里面还有 `原始资料-raw/` 和 `知识层-wiki/`）也没关系：插件会认 `index.md`，自动下钻到知识层，并在返回里注明它实际读的是哪一层。
 
@@ -420,7 +446,9 @@ tools/probe.mjs 检索质量探针：hit@1 / hit@3 / Recall@5，追加趋势 CSV
 tools/preview.mjs 把面板渲染成静态页（真组件 + 真 CSS），改样式不必重启 DSH
 tools/verify-host.mjs 宿主实机验收：--self 自己起个真 HTTP 服务打 10 项探针，--port 探已在跑的 DSH
 tools/verify-bridge.mjs 真管线体检：起一次 Python 桥，断言两个引擎都活着、没被标降级
-docs/库结构.md  库结构约定（这份才是一手文档）
+docs/使用指南.md  从零建库的完整流程（第一次用看这份）
+docs/templates/AGENTS.md  库里那份规则文件的模板（200 行，复制即用）
+docs/prompts/  六份可复制的提示词（搭骨架 / 立规则 / 摄入 / 体检 / 查询 / 脱敏）
 docs/README.md  文档导航页
 CHANGELOG.md    版本变更记录
 docs/superpowers/specs/  检索面板的设计稿
