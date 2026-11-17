@@ -235,7 +235,7 @@ function liveState() {
  * 本机引擎优先：宿主里跑的还是旧进程，接口缺 termPages 这类新字段就会让预览
  * 少画一块 —— 预览要验的是我刚改的代码，不是宿主那一刻的版本。
  */
-async function localSearch() {
+async function localSearch(query) {
   try {
     const { loadCorpus } = await import('../lib/corpus.js')
     const { run } = await import('../lib/engine.js')
@@ -245,7 +245,9 @@ async function localSearch() {
     if (!info.root) return null
     const started = Date.now()
     const corpus = await loadCorpus(info.root)
-    const result = run(corpus, { mode: 'search', query: '上下文 预算', limit: 5, explain: true })
+    // 查询词由调用方给：文档截图要拿示例库自己的词（否则截图里是一个空结果面板），
+    // 而演示「这套东西长什么样」时用什么都行。早先这里写死过一个真实库的词。
+    const result = run(corpus, { mode: 'search', query, limit: 5, explain: true })
     return {
       ...result,
       scanned: corpus.stats?.pages ?? 0,
@@ -486,7 +488,7 @@ function panelShell(h, preview, data, options) {
   return `<div class="wn-root"><div class="wn-panel${opts.compact ? ' wn-panel-compact' : ''}">
   <div class="wn-search"><input class="wn-input wn-search-input" type="text" value="${
     opts.query ? escapeAttr(opts.query) : ''
-  }" placeholder="输入关键词，例如「上下文 预算」">${
+  }" placeholder="输入关键词，例如「项目 复盘」">${
     opts.query ? render(h(preview.CopyButton, { className: 'wn-copy-query', text: opts.query, label: '复制词' })) : ''
   }<button class="wn-btn wn-btn-primary" type="button">查一下</button></div>
   ${parts.join('\n  ')}
@@ -565,7 +567,8 @@ const { preview } = loadBundle(css, text)
 const h = createElement
 const out = resolve(ROOT, arg('out', 'preview/panel.html'))
 
-const live = (await localSearch()) || (await liveHits())
+const SEARCH_QUERY = arg('query', '上下文 预算')
+const live = (await localSearch(SEARCH_QUERY)) || (await liveHits())
 // `--data <file>` 优先：文档里的介绍图必须用中性样例，不能让库里的真实页面名跟着截图出海。
 const dataArg = arg('data', '')
 const sample = dataArg !== '' ? JSON.parse(readFileSync(resolve(process.cwd(), dataArg), 'utf8')) : live || { hits: [], total: 0, considered: 0, elapsedMs: 0, scanned: 0 }
