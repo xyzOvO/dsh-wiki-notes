@@ -131,23 +131,27 @@ async function probe(base) {
   // 2) 版本指纹：这几样分别是 1.8.0 / 1.9.0 / 1.10.0 新增的字段。
   //    缺哪个就说明跑到的是哪个版本的宿主 —— 比读 package.json 可靠，
   //    因为 package.json 说的是磁盘上的代码，不是内存里那个模块。
+  //
+  //    注意「库里没有数据」不等于「宿主没有这个能力」：一个零标签的库，
+  //    `overview.tags` 就是 []，拿 tags[0].with 去判断会把好宿主判成旧的。
+  //    所以数据类探针在没有数据时记 skip，不计入缺失。
   const overview = state.overview ?? null
+  const hasTags = Array.isArray(overview?.tags) && overview.tags.length > 0
   const marks = [
     ['connection', typeof state.connection === 'string'],
     ['usage', Boolean(state.usage)],
     ['overview', Boolean(overview)],
     ['overview.tagPages', Boolean(overview?.tagPages)],
-    [
-      'overview.tags[].with',
-      Array.isArray(overview?.tags) && overview.tags.length > 0 && Array.isArray(overview.tags[0]?.with),
-    ],
+    ['overview.tags[].with', hasTags ? Array.isArray(overview.tags[0]?.with) : 'skip'],
   ]
-  const missing = marks.filter(([, ok]) => !ok).map(([name]) => name)
+  const missing = marks.filter(([, ok]) => ok === false).map(([name]) => name)
+  const skipped = marks.filter(([, ok]) => ok === 'skip').map(([name]) => name)
   report(
     missing.length === 0 ? 'PASS' : 'FAIL',
     '宿主版本指纹',
     missing.length === 0
-      ? 'connection / usage / overview.tagPages / tags[].with 都在（≥ 1.10.0）'
+      ? 'connection / usage / overview.tagPages / tags[].with 都在（≥ 1.10.0）' +
+          (skipped.length > 0 ? `；${skipped.join(' / ')} 因库里没有标签跳过` : '')
       : `缺 ${missing.join(' / ')} —— 宿主还是旧模块，重启 DSH 再来`,
   )
 
