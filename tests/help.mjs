@@ -65,7 +65,7 @@ ok('help 带出各小节，且真的讲了 status 取值', () => {
   if (titles.length < 4) throw new Error(`只有 ${titles.length} 节：${titles.join(' / ')}`)
   if (!titles.some((title) => title.includes('status'))) throw new Error(`没有 status 小节：${titles.join(' / ')}`)
   const text = JSON.stringify(result.sections)
-  for (const word of ['no_match', 'partial', 'unavailable', 'degraded']) {
+  for (const word of ['no_match', 'partial', 'unavailable', 'or_fallback', 'orFallback']) {
     if (!text.includes(word)) throw new Error(`status 说明里缺 ${word}`)
   }
 })

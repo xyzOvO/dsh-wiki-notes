@@ -146,10 +146,10 @@ check(
 )
 check('missedTerms 只剩那个一页没沾到的词', JSON.stringify(mixed.missedTerms) === JSON.stringify(['玄武']),
   JSON.stringify(mixed.missedTerms))
-check('没有全词命中时 matchMode 是 or', mixed.matchMode === 'or' && mixed.degraded === true, mixed.matchMode)
+check('没有全词命中时 matchMode 是 or', mixed.matchMode === 'or' && mixed.orFallback === true, mixed.matchMode)
 
 const andOnly = run(corpus, { mode: 'search', query: '上下文', explain: true })
-check('全词命中时 matchMode 是 and', andOnly.matchMode === 'and' && andOnly.degraded === false, andOnly.matchMode)
+check('全词命中时 matchMode 是 and', andOnly.matchMode === 'and' && andOnly.orFallback === false, andOnly.matchMode)
 check('termPages 只在 explain 时出现（模型输出不多这个字段）',
   run(corpus, { mode: 'search', query: '上下文' }).termPages === undefined)
 check(

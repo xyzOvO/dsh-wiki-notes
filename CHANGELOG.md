@@ -2,6 +2,26 @@
 
 本文件的体例：只记「对使用者有影响的行为变化」，不记内部重构。版本号遵循 semver，`0.x` 阶段不承诺兼容。
 
+## 1.11.0
+
+### 改 · 一个词两种含义，现在只剩一种：`degraded` → `orFallback`
+`wiki_context` 的 `status.degraded` 说的是**引擎挂了**（先修通道再谈结论）；`wiki_recall` 的 `degraded` 说的是**放宽成 OR**（命中面变宽、精度下降）。同一个词，一个要报警、一个只是提醒，读的人和模型都会弄反。
+
+| 位置 | 旧 | 新 |
+| --- | --- | --- |
+| `wiki_recall` 结果字段 | `degraded: true` | `orFallback: true` |
+| `wiki_recall` 结果状态 | `status: "degraded"` | `status: "or_fallback"` |
+| `wiki_context` 的引擎状态 | `status.degraded` | **不变**（这里本来就该叫这个名字） |
+
+跟着改的消费者：调用账本的 `fallback` 推导、面板计数行的黄字提示、`help` 里的状态说明、README 与测试。`tests/status.mjs` 新加一条守卫：search 的结果里**不许再有** `degraded` 这个键 —— 改名这种东西，没人盯着就会在下一版悄悄长回来。
+
+这是输出契约的变化。你是被动读它的模型，动作不变（看到 `or_fallback` 就收窄检索词或换更短的词）；但如果你的库里有脚本在 parse `degraded`，得跟着改。
+
+### 改 · 文档里那张概览截图改用随包示例库渲染
+`docs/preview-overview.png` 现在是拿 `examples/demo-wiki`（手冲咖啡那 10 页）真跑 `node tools/preview.mjs --state <样例> --tab overview`、渲真组件后截的图。之前那张用的是本机私人笔记库的样例 —— 数字是真的，但「真实的库长什么样」本身就带着页名、标签、枢纽页这些不该出海的东西。
+
+图里的路径、使用情况计数都是编的，**数字结构是真的**（页数 / 小节 / 用时就来自那次真实渲染），所以图不会骗人：组件改了、重出一遍就同步。
+
 ## 1.10.3
 
 ### 新 · 第二种结构的示例库：一个目录 + 一堆 .md

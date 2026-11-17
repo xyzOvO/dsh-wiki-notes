@@ -131,7 +131,7 @@ ts · source · tool · mode · query · hits · ms · ok
 status · fallback · considered · warnings · topScore
 ```
 
-前 8 个是「发生了什么」，后 5 个是「为什么是这样」：`status` 是这次结果的状态（`ok` / `partial` / `no_match` / `unconfigured` / `error`），`fallback` 说明靠哪层兜底（`coverage` 字面兜底 / `or` 放宽 OR / 空 = 正常），`considered` 是参与比对的页数，`warnings` 是警告条数，`topScore` 是最高分。
+前 8 个是「发生了什么」，后 5 个是「为什么是这样」：`status` 是这次结果的状态（`ok` / `partial` / `or_fallback` / `no_match` / `unconfigured` / `error`），`fallback` 说明靠哪层兜底（`coverage` 字面兜底 / `or` 放宽 OR / 空 = 正常），`considered` 是参与比对的页数，`warnings` 是警告条数，`topScore` 是最高分。
 
 **没有这 5 个字段的时候，「0 命中」是一句没法追责的话**：换词重搜、放开过滤、修库路径，三种下一步长得一模一样。现在「命中」格悬停会显示「参与 N 页 · 最高 X 分」，诊断列直接标出「字面兜底 / 放宽 OR」。
 
@@ -258,6 +258,10 @@ WIKI_ROOT="<仓库绝对路径>/examples/demo-wiki" node tools/verify-host.mjs -
 
 ![概览页签：左边一串数字全是宿主算好的，这一页只负责摆出来](docs/preview-overview.png)
 
+> 截图不是画的，是拿随包的 `examples/demo-wiki`（手冲咖啡那 10 页）跑 `node tools/preview.mjs --state <样例> --tab overview` 渲真组件后截的 —— 组件改了、图不会自己变，所以每次发版都重出一遍。
+>
+> 为什么不用「真实笔记库」的截图：那样连页名、标签、枢纽页都跟着出海，而这台机器上的库是私人的。
+
 概览按「先看库有没有毛病，再决定查什么」排，只摆这六块：
 
 | 块 | 内容 | 为什么在这一块 |
@@ -350,7 +354,7 @@ WIKI_ROOT="<仓库绝对路径>/examples/demo-wiki" node tools/verify-host.mjs -
 
 评分刻意朴素：标题全等 120 / 标题含 60 / 别名含 50 / 标签含 25 / 正文词频 ×3（封顶 36）/ index 摘要只在其它通道全 0 时补 8；同分再比类型层（综合 3 · 总览 3 / 概念·实体·对比 2 / 资料 1）→ 更新时间 → 码点序。四处经验细节：摘要分只补漏不抢位、同分用码点序（拼音序不可复现）、选节排除清单类与元讨论类小节、总览与综合同层（总览是全库唯一入口页，跨模块的词在它里面出现分量不同）。
 
-中文连写整句在 AND / OR 双双落空时会降级到**字面覆盖率兜底**（中文二字组 / 拉丁整词，覆盖率 ≥45% 才入选，`degraded: true` 并在结果里说明），这是缓解不是语义检索；查询先做 NFKC 归一化并剥掉两端疑问词。
+中文连写整句在 AND / OR 双双落空时会降级到**字面覆盖率兜底**（中文二字组 / 拉丁整词，覆盖率 ≥45% 才入选，`orFallback: true` 并在结果里说明），这是缓解不是语义检索；查询先做 NFKC 归一化并剥掉两端疑问词。
 
 ---
 

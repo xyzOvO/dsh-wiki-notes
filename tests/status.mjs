@@ -99,10 +99,18 @@ ok('正常库但没有这个词 → no_match', () => {
   assert.equal(value.total, 0)
 })
 
-ok('只命中部分检索词 → degraded（不是 no_match）', () => {
+ok('只命中部分检索词 → or_fallback（不是 no_match）', () => {
   const value = run(fakeCorpus({ pages: [PAGE] }), { mode: 'search', query: '上下文 量子' })
-  assert.equal(value.status, 'degraded')
-  assert.equal(value.degraded, true)
+  assert.equal(value.status, 'or_fallback')
+  assert.equal(value.orFallback, true)
+})
+
+ok('search 不再有 degraded 这个字段（它和 context 的 status.degraded 同名不同义）', () => {
+  const value = run(fakeCorpus({ pages: [PAGE] }), { mode: 'search', query: '上下文 量子' })
+  assert.equal(Object.prototype.hasOwnProperty.call(value, 'degraded'), false)
+  assert.equal(typeof value.orFallback, 'boolean')
+  assert.equal(value.status, 'or_fallback')
+  // context 那条通道的 status.degraded（引擎有没有坏）是另一个对象上的事，这里不该出现它的同名兄弟
 })
 
 /* ---------------------------- 覆盖类状态 ---------------------------- */
@@ -226,10 +234,10 @@ ok('超大页只在 index 摘要里命中 → partial + 摘要口径的提醒', 
   assert.match(value.warnings.join('\n'), /index 摘要命中查询词/)
 })
 
-ok('降级与超大页相关同时成立 → 状态 degraded，但两条事实都输出', () => {
+ok('降级与超大页相关同时成立 → 状态 or_fallback，但两条事实都输出', () => {
   const corpus = fakeCorpus({ pages: [PAGE, BIG], stats: { oversized: 1 } })
   const value = run(corpus, { mode: 'search', query: '上下文 大文件' })
-  assert.equal(value.status, 'degraded')
+  assert.equal(value.status, 'or_fallback')
   const text = value.warnings.join('\n')
   assert.match(text, /超大页/)
   assert.match(text, /降级为 OR/)
@@ -360,9 +368,9 @@ ok('没有漏词时不出「没沾到」那行（正常路径不多一个 token�
   assert.doesNotMatch(text, /没沾到/)
 })
 
-ok('degraded 的说明只说一遍（warnings 与 note 不能重复）', () => {
+ok('orFallback 的说明只说一遍（warnings 与 note 不能重复）', () => {
   const value = run(corpus, { mode: 'search', query: '上下文 量子纠缠' })
-  assert.equal(value.status, 'degraded')
+  assert.equal(value.status, 'or_fallback')
   const text = render({ mode: 'search' }, value)
   const times = text.split('降级').length - 1
   assert.equal(times, 1, `「降级」出现了 ${times} 次：\n${text}`)
@@ -433,7 +441,7 @@ ok('覆盖率兜底时说「字面覆盖率」，不能再说成 OR', () => {
   const body = '上下文工程说的是怎么把有限预算花在刀刃上。'
   const value = run(fakeCorpus({ pages: manyPages(24, body) }), { mode: 'search', query: '上下文工程说的是什么呢' })
   assert.equal(value.coverageFallback, true, '这条查询应当走覆盖率兜底')
-  assert.equal(value.status, 'degraded')
+  assert.equal(value.status, 'or_fallback')
   assert.match(value.warnings[0], /字面覆盖率/)
   assert.doesNotMatch(value.warnings[0], /OR/, '兜底不是 OR 降级，措辞不能混')
 })

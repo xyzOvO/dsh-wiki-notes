@@ -196,8 +196,8 @@ check('/search 带 termPages（explain 开着）',
   Array.isArray(diag.json?.termPages) && diag.json.termPages.length === 2, JSON.stringify(diag.json?.termPages))
 check('/search 的 missedTerms 指出没用上的词',
   JSON.stringify(diag.json?.missedTerms) === JSON.stringify(['不存在的词']), JSON.stringify(diag.json?.missedTerms))
-check('/search 的 matchMode 与 degraded 一致',
-  diag.json?.matchMode === (diag.json?.degraded === true ? 'or' : 'and'), String(diag.json?.matchMode))
+check('/search 的 matchMode 与 orFallback 一致',
+  diag.json?.matchMode === (diag.json?.orFallback === true ? 'or' : 'and'), String(diag.json?.matchMode))
 
 // 调用审计：面板手查要留痕，/calls 要读得回，清空与开关要走写闸
 const callsEmpty = await call('GET', '/calls')
