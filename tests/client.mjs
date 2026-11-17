@@ -133,7 +133,8 @@ console.log('✓ 面板可调用，根节点:', panelTree.type, panelTree.props.
 for (const [label, needle] of [
   ['检索页签复用同一个检索面板', "h(WikiSearchPanel, { compact: false })"],
   ['调用记录以嵌入方式挂进面板', "h(WikiCallsSection, { embedded: true })"],
-  ['概览页签', 'h(WikiPanelStatus, {})'],
+  ['概览页签', 'h(WikiPanelStatus, {'],
+  ['概览页签把「搜索」按钮接回检索', "onSearch: function () {"],
 ]) {
   if (!source.includes(needle)) throw new Error(`面板缺页签：${label}（找不到 ${needle}）`)
   console.log('✓ 面板页签:', label)
@@ -606,5 +607,122 @@ for (const [label, needle] of [
 }
 if (source.includes('wn-notice-bad')) throw new Error('调用页错误条仍在用没有样式的 wn-notice-bad')
 console.log('✓ 检索面板：输入法、并发改词、兜底措辞、读屏与省略号')
+
+// ---- 概览页签：数字只能来自宿主 ----
+// 这条不是风格问题。前端一旦自己数标签、自己算比例，它和工具输出就会在某次改动后
+// 悄悄分家 —— 而分家那天两边都「看起来正常」，谁也证明不了谁错。
+const statusStart = source.indexOf('function WikiPanelStatus')
+const statusEnd = source.indexOf('var PANEL_TABS = [')
+if (statusStart < 0 || statusEnd < statusStart) throw new Error('找不到概览组件源码，守卫无从谈起')
+const statusSrc = source.slice(statusStart, statusEnd)
+if (statusSrc.includes('reduce(')) throw new Error('概览组件里出现了 reduce —— 说明它在自己重算一套数字')
+
+for (const [label, needle] of [
+  ['概览读宿主的 overview', 'data.overview'],
+  ['可检索页面用宿主字段', 'pages.searchable'],
+  ['资料页面用宿主字段', 'pages.resources'],
+  ['索引时间用宿主字段', 'index.scannedAt'],
+  ['索引耗时用宿主字段', 'index.scannedMs'],
+  ['内容问题用宿主字段', 'problems.brokenTotal'],
+  ['最近访问用宿主账本', 'data.visits'],
+  ['主题与标签用宿主聚合', 'ov.tags'],
+  ['知识关系用宿主聚合', 'relations.hubPages'],
+  ['快捷操作：搜索', 'props.onSearch'],
+  ['快捷操作：查看全部页面', '查看全部页面'],
+  ['全部页面走 /pages', "'/pages'"],
+  ['读一页走 /page', "'/page?name='"],
+  ['状态三态文案', '已连接'],
+  ['状态三态文案：未配置', '未配置'],
+  ['状态三态文案：不可用', '不可用'],
+  ['读一页顺手刷新最近访问', "apiGet('/state', SCAN_TIMEOUT_MS)"],
+  ['概览里不放路径输入框（只读）', '这一页只读'],
+]) {
+  if (!statusSrc.includes(needle)) throw new Error(`缺少概览实现：${label}（找不到 ${needle}）`)
+}
+
+// 设计稿是北欧极简：2px 直角、无阴影、只改边框的 hover、700ms 过渡、字重不超过 400。
+for (const [label, needle] of [
+  ['Hygge 卡片：直角 2px + 半透明白底', '.hx-card{background:rgba(255,255,255,0.60);border:1px solid rgba(212,205,197,0.40);border-radius:2px;'],
+  ['Hygge hover 只改边框', '.hx-card:hover{border-color:rgba(212,205,197,0.80);}'],
+  ['Hygge 过渡 700ms', 'transition:border-color 700ms ease-in-out'],
+  ['Hygge 主按钮 charcoal 底', '.hx-btn-solid{background:#3d3d3d;'],
+  ['Hygge 次级文字用 wood', 'color:#a89279'],
+]) {
+  if (!source.includes(needle)) throw new Error(`缺少设计稿样式：${label}（找不到 ${needle}）`)
+}
+// 字重纪律：设计稿只许 200 / 300 / 400。.hx 这一段的规则里出现 500 以上就是越界。
+const hxStart = source.indexOf("'.hx{")
+const hxEnd = source.indexOf("].join('')")
+const hxCss = hxStart < 0 || hxEnd < hxStart ? '' : source.slice(hxStart, hxEnd)
+if (hxCss === '') throw new Error('找不到 .hx 样式段')
+for (const heavy of ['font-weight:500', 'font-weight:600', 'font-weight:700']) {
+  if (hxCss.includes(heavy)) throw new Error(`概览样式用了 ${heavy}：设计稿只许 200/300/400`)
+}
+if (hxCss.includes('box-shadow')) throw new Error('概览样式出现了阴影：设计稿明确「无阴影」')
+if (/border-radius:(?!2px|50%)/.test(hxCss)) throw new Error('概览样式的圆角不是 2px 或正圆：设计稿只许 2px 直角')
+console.log('✓ 概览页签：数字来自宿主、只读、按设计稿排版')
+
+// ---- 概览组件：喂一份 /state 就能渲出来，且数字原样来自那份数据 ----
+const previewApi = moduleExports.__preview
+if (previewApi === undefined || typeof previewApi.whenText !== 'function') {
+  throw new Error('概览的时间格式函数没导出，测不了时区')
+}
+
+// 带 Z 的是绝对时刻（corpus 的 scannedAt 就是 toISOString），必须换算成本地
+const isoZ = '2026-11-17T09:39:00.000Z'
+const localOf = new Date(isoZ)
+const pad2 = (value) => (value < 10 ? '0' : '') + value
+const expectedLocal = `${pad2(localOf.getMonth() + 1)}-${pad2(localOf.getDate())} ${pad2(localOf.getHours())}:${pad2(localOf.getMinutes())}`
+if (previewApi.whenText(isoZ) !== expectedLocal) {
+  throw new Error(`带时区的时间没换成本地：${previewApi.whenText(isoZ)} ≠ ${expectedLocal}`)
+}
+// 账本里写的是本地墙钟，不带时区 —— 切字符串才对，换算会平白多减 8 小时
+if (previewApi.whenText('2026-11-17T17:32:41') !== '11-17 17:32') {
+  throw new Error(`本地墙钟被误当初 UTC 换算：${previewApi.whenText('2026-11-17T17:32:41')}`)
+}
+console.log('✓ 概览时间：带时区的换算成本地，本地墙钟原样切')
+
+const fakeState = {
+  connection: 'connected',
+  ok: true,
+  root: 'D:/示例/markdown-notes',
+  scannedRoot: 'D:/示例/markdown-notes',
+  stats: { scannedMs: 42 },
+  topics: [],
+  prompt: { enabled: true },
+  visits: [{ ts: '2026-11-17T17:20:00', name: '示例页面一', file: '概念-concepts/示例页面一.md', source: 'panel' }],
+  overview: {
+    pages: { all: 12, searchable: 11, resources: 5, sections: 40, bytes: 921600 },
+    index: { scannedAt: isoZ, scannedMs: 42, discovered: 12, skipped: 0 },
+    problems: { brokenPages: 1, brokenTotal: 2, unreadable: 0, oversized: 1, duplicates: 0 },
+    tags: [{ tag: '示例标签', count: 3 }],
+    tagTotal: 1,
+    relations: {
+      links: 7,
+      orphans: 2,
+      hubPages: [{ name: '枢纽页', inlinks: 3 }],
+      brokenTargets: [{ name: '缺的那页', count: 2 }],
+      orphanSample: ['孤岛页'],
+    },
+  },
+}
+
+const overviewTree = JSON.stringify(previewApi.WikiPanelStatus({ data: fakeState, onSearch: function () {} }))
+for (const [label, needle] of [
+  ['可检索页面的数字来自数据', '"11"'],
+  ['资料页面的数字来自数据', '"5"'],
+  ['小节数的数字来自数据', '"40"'],
+  ['断链处数来自数据', '"2"'],
+  ['标签来自数据', '示例标签'],
+  ['枢纽页来自数据', '枢纽页'],
+  ['断链目标来自数据', '缺的那页'],
+  ['最近访问来自数据', '示例页面一'],
+  ['状态文案来自 connection', '已连接'],
+]) {
+  if (!overviewTree.includes(needle)) throw new Error(`概览没把数据摆出来：${label}（找不到 ${needle}）`)
+}
+// 喂了 data 就不该显示「正在读库状态」——否则静态预览会被截成一张空态图
+if (overviewTree.includes('正在读库状态')) throw new Error('给了 data 仍在显示读取中')
+console.log('✓ 概览组件：喂 /state 就出数，不自己算')
 
 console.log('\nclient smoke 全部通过')

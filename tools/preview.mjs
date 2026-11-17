@@ -527,9 +527,13 @@ function pageShell(h, preview, data, options) {
   const body =
     active === 'search'
       ? panelShell(h, preview, data, { compact: false, query: opts.query })
-      : `<div class="wn-panel wn-panel-compact"><div class="wn-card"><div class="wn-card-head"><span class="wn-card-title">${
-          active === 'calls' ? '调用记录' : '概览'
-        }</span></div><div class="wn-dim">这个页签在静态预览里不展开 —— 它读的是 /calls 与 /state 的实时数据，写死一份就等于又画一张假的。</div></div></div>`
+      : active === 'status' && preview && typeof preview.WikiPanelStatus === 'function'
+        ? // 概览页签也走真组件：给了 --state 就用那份数据（文档截图必须用中性样例），
+          // 没给就退回活库的 /state。组件收到 data 就不再打接口，静态渲染不会卡在「读取中」。
+          render(h(preview.WikiPanelStatus, { data: opts.state ?? null, onSearch: function () {} }))
+        : `<div class="wn-panel wn-panel-compact"><div class="wn-card"><div class="wn-card-head"><span class="wn-card-title">${
+            active === 'calls' ? '调用记录' : '概览'
+          }</span></div><div class="wn-dim">这个页签在静态预览里不展开 —— 它读的是 /calls 与 /state 的实时数据，写死一份就等于又画一张假的。</div></div></div>`
   const book = preview && preview.WikiPanelIcon ? render(h(preview.WikiPanelIcon, { size: 18, active: true })) : ''
   const rail = `<div class="preview-rail"><span class="preview-rail-item preview-rail-on">${book}</span><span class="preview-rail-item"><i class="preview-rail-ph"></i></span><span class="preview-rail-item"><i class="preview-rail-ph"></i></span></div>`
   return `<div class="preview-page">${rail}<div class="preview-surface preview-main"><div class="wn-root wn-page">
@@ -559,6 +563,10 @@ const live = (await localSearch()) || (await liveHits())
 const dataArg = arg('data', '')
 const sample = dataArg !== '' ? JSON.parse(readFileSync(resolve(process.cwd(), dataArg), 'utf8')) : live || { hits: [], total: 0, considered: 0, elapsedMs: 0, scanned: 0 }
 const libState = (await localState()) || (await liveState())
+// `--state <file>`：概览页签用的 /state 样例。文档截图必须用中性样例 ——
+// 真实的标签名和枢纽页名会跟着截图一起出海。
+const stateArg = arg('state', '')
+const stateSample = stateArg !== '' ? JSON.parse(readFileSync(resolve(process.cwd(), stateArg), 'utf8')) : libState
 
 // 预览里那个输入框显示的词：跟着样例走，别写死一个和结果对不上的。
 const QUERY = sample.query || '上下文 预算'
@@ -566,7 +574,11 @@ const QUERY = sample.query || '上下文 预算'
 // `--only page` 只出左侧栏那一页（文档截图用）；不给就出全部，方便改样式时一眼扫过去。
 // 每个 frame 记一个短名，别用中文标签当选择器 —— 标签是给人看的，会改。
 const frames = [
-  ['page', () => `<div class="preview-frame">${pageShell(h, preview, sample, { query: QUERY, tab: arg('tab', 'search') })}</div>`],
+  [
+    'page',
+    () =>
+      `<div class="preview-frame">${pageShell(h, preview, sample, { query: QUERY, tab: arg('tab', 'search'), state: stateSample })}</div>`,
+  ],
   ['settings', () => frame('设置页 · 有结果', 'preview-settings', panelShell(h, preview, sample, { open: 0, query: QUERY }))],
   ['sidebar', () => frame('右侧栏 · 有结果', 'preview-sidebar', sidebarShell(h, preview, sample, { compact: true, query: QUERY }))],
   [
