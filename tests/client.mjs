@@ -135,10 +135,31 @@ for (const [label, needle] of [
   ['调用记录以嵌入方式挂进面板', "h(WikiCallsSection, { embedded: true })"],
   ['概览页签', 'h(WikiPanelStatus, {'],
   ['概览页签把「搜索」按钮接回检索', "onSearch: function () {"],
+  ['概览是首页（默认页签就是它）', "var tabTuple = useState('overview')"],
+  ['概览按 view 出窗，不是四个组件各读一遍 /state', "typeof props.view === 'string' ? props.view : 'overview'"],
 ]) {
   if (!source.includes(needle)) throw new Error(`面板缺页签：${label}（找不到 ${needle}）`)
   console.log('✓ 面板页签:', label)
 }
+
+// 页签清单：概览是首页，其余各自成窗。挤在一起就是「六块数字一屏小字」。
+for (const [label, needle] of [
+  ['概览排第一', "['overview', '概览']"],
+  ['页面独立成窗', "['pages', '页面']"],
+  ['标签独立成窗', "['tags', '标签']"],
+  ['关系独立成窗', "['relations', '关系']"],
+  ['调用记录仍在', "['calls', '调用记录']"],
+  ['检索仍在', "['search', '检索']"],
+]) {
+  if (!source.includes(needle)) throw new Error(`页签清单缺项：${label}（找不到 ${needle}）`)
+}
+// 首页只许摆这六块：多余的（页面清单 / 标签 / 关系）得挪到各自的窗里
+const overviewLine = source.slice(source.indexOf('overview: ['), source.indexOf('],', source.indexOf('overview: [')))
+for (const banned of ['tagsSection', 'relationsSection', 'pagesSection']) {
+  if (overviewLine.includes(banned)) throw new Error(`概览首页里还塞着 ${banned} —— 它应该在自己的窗里`)
+}
+if (!overviewLine.includes('quickSection')) throw new Error('概览首页少了快捷操作')
+console.log('✓ 页签：概览做首页，标签/关系/页面各自成窗')
 
 // ---- 调用记录：是「知识库」页里的第二个页签，不是第二个一级入口 ----
 if (!source.includes("setTab('calls')")) throw new Error('知识库页里没有切到调用记录的页签')
@@ -643,12 +664,15 @@ for (const [label, needle] of [
 }
 
 // 设计稿是北欧极简：2px 直角、无阴影、只改边框的 hover、700ms 过渡、字重不超过 400。
+// 对比度是第二遍改的：设计稿那套浅色（半透明白卡 + #a89279 灰字）在 DSH 的暖白画布上
+// 糊成一片，所以卡片改实底、次级文字压到 #6f6558 —— 再浅就只剩「看起来像禁用」。
 for (const [label, needle] of [
-  ['Hygge 卡片：直角 2px + 半透明白底', '.hx-card{background:rgba(255,255,255,0.60);border:1px solid rgba(212,205,197,0.40);border-radius:2px;'],
-  ['Hygge hover 只改边框', '.hx-card:hover{border-color:rgba(212,205,197,0.80);}'],
-  ['Hygge 过渡 700ms', 'transition:border-color 700ms ease-in-out'],
-  ['Hygge 主按钮 charcoal 底', '.hx-btn-solid{background:#3d3d3d;'],
-  ['Hygge 次级文字用 wood', 'color:#a89279'],
+  ['卡片：直角 2px + 实底（半透明叠暖白等于没有边界）', '.hx-card{background:#fffdf9;border:1px solid rgba(168,152,133,0.55);border-radius:2px;'],
+  ['hover 只改边框', '.hx-card:hover{border-color:rgba(90,122,107,0.55);}'],
+  ['过渡 700ms', 'transition:border-color 700ms ease-in-out'],
+  ['主按钮 charcoal 底', '.hx-btn-solid{background:#3d3d3d;'],
+  ['正文近黑，不留在 charcoal', 'line-height:1.8;color:#2b2724;}'],
+  ['次级文字压到 #6f6558', 'letter-spacing:0.12em;color:#6f6558;}'],
 ]) {
   if (!source.includes(needle)) throw new Error(`缺少设计稿样式：${label}（找不到 ${needle}）`)
 }
@@ -715,9 +739,6 @@ for (const [label, needle] of [
   ['资料页面的数字来自数据', '"5"'],
   ['小节数的数字来自数据', '"40"'],
   ['断链处数来自数据', '"2"'],
-  ['标签来自数据', '示例标签'],
-  ['枢纽页来自数据', '枢纽页'],
-  ['断链目标来自数据', '缺的那页'],
   ['最近访问来自数据', '示例页面一'],
   ['状态文案来自 connection', '已连接'],
 ]) {
@@ -726,7 +747,34 @@ for (const [label, needle] of [
 // 喂了 data 就不该显示「正在读库状态」——否则静态预览会被截成一张空态图
 if (overviewTree.includes('正在读库状态')) throw new Error('给了 data 仍在显示读取中')
 
-// 旧宿主的退化路径：有 data 但没有 overview，应该明说「要重启」，而不是排一排 0
+// 一次只出一个窗：首页摆六块，标签和关系各在自己的页签里
+const viewTree = (view) => JSON.stringify(previewApi.WikiPanelStatus({ data: fakeState, view: view, onSearch: function () {} }))
+const shown = {
+  overview: viewTree('overview'),
+  tags: viewTree('tags'),
+  relations: viewTree('relations'),
+}
+for (const [label, needle] of [
+  ['首页有页面数量', '可检索页面'],
+  ['首页有索引状态', '索引状态'],
+  ['首页有内容问题', '内容问题'],
+  ['首页有最近访问', '最近访问'],
+  ['首页有快捷操作', '快捷操作'],
+]) {
+  if (!shown.overview.includes(needle)) throw new Error(`概览首页缺块：${label}`)
+}
+// 「查看全部页面」这颗按钮属于快捷操作，留下；清单本身（带「按页名筛…」的那个框）不该在首页
+for (const banned of ['主题与标签', '知识关系', '按页名筛']) {
+  if (shown.overview.includes(banned)) throw new Error(`概览首页不该出现「${banned}」—— 它有自己的窗`)
+}
+if (!shown.tags.includes('主题与标签')) throw new Error('标签窗没画标签')
+if (!shown.tags.includes('示例标签')) throw new Error('标签窗没把宿主的标签摆出来')
+if (shown.tags.includes('可检索页面')) throw new Error('标签窗把首页的六块又抄了一遍')
+if (!shown.relations.includes('知识关系')) throw new Error('关系窗没画知识关系')
+if (!shown.relations.includes('枢纽页')) throw new Error('关系窗缺枢纽页')
+if (!shown.relations.includes('缺的那页')) throw new Error('关系窗缺断链目标')
+if (shown.relations.includes('可检索页面')) throw new Error('关系窗把首页的六块又抄了一遍')
+console.log('✓ 概览/标签/关系：一个组件四个窗，各摆各的')
 const staleTree = JSON.stringify(
   previewApi.WikiPanelStatus({ data: { connection: 'connected', ok: true, root: 'D:/示例', stats: {}, visits: [] }, onSearch: function () {} }),
 )
