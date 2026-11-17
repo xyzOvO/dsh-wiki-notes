@@ -463,6 +463,23 @@ WIKI_ROOT="/path/your/知识层-wiki" WIKI_TOOLS="/path/your/工具-tools" node 
 - 小字别用 `--wn-faint`（这组 token 在浅色底上约 3.4:1，低于 WCAG AA 的 4.5），小字一律 `--wn-muted`（约 5:1），层级靠字号和字重拉开，不靠把字调淡。
 - `--diag` 遍历样式表时，别用「有 `cssRules` 就往下钻」的写法：现代 Chrome 的 `CSSStyleRule` 自己也带一个空的 `cssRules`（CSS 嵌套），会把你正要找的那条规则跳过，于是明明 `display=flex` 却报「NOT FOUND」。先判 `rule.cssRules.length`。
 
+## 隐私：仓库里不该出现的东西
+
+这个插件要读的是**别人自己的笔记库**，所以「作者的本机」尤其不该混进发布物。分两类看：
+
+**机器本地产物，靠 `.gitignore` 挡**：`calls.jsonl`（调用账本）、`visits.jsonl`（访问账本，1.8.3 后已停用）、`governance.jsonl`（观察事件）、`wiki-notes.config.json`（本机库路径）、`preview/`（预览产物）、`tests/local/`（含真实页名的回归基线）。
+
+> `visits.jsonl` 曾经被误提交过一版（63 行真实页名），后来用 `git rm --cached` 撤出跟踪。**它仍留在 `b5ecf2f` 那次提交的历史里** —— 要不要改写历史（`git filter-repo` + force push，所有 tag 与克隆都会变）是仓库所有者的决定，不自动做。
+
+**默认值，`.gitignore` 挡不住**，只能靠看：默认库路径、默认查询词、默认示例、默认夹具里的标签名、`package.json` 的 `description`、工具说明 `DESCRIPTION`。这些「长得像正常代码」，所以每次发版都拿 `grep` 扫一遍：
+
+```bash
+grep -rIl --exclude-dir=.git --exclude-dir=local --exclude-dir=history --exclude-dir=preview \
+  -e '<你的库名>' -e '<你的主题词>' . 
+```
+
+截图同理：`docs/*.png` 一律用随包的 `examples/demo-wiki` 渲真组件截图，不用真实笔记库 —— 「真实库长什么样」本身就带页名、标签、枢纽页。
+
 ## License
 
 MIT
