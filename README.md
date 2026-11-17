@@ -177,6 +177,15 @@ plugin_manager { action: "install_bundle", target: "<绝对路径>" }
 
 返回 `application: applied` 就生效，不用重启。但**改插件自己的代码要重启 DSH**：`lib/*.js`（宿主半）和 `lib/client.js`（设置页）都一样，已载入的模块不会因为关开插件而重新求值。
 
+想先看它到底怎么读库、不打算马上接自己的笔记：仓库里带了一个**跟笔记完全无关的小库** `examples/demo-wiki/`（10 页手冲咖啡笔记，含标签、别名、双链、一条红链、一个孤岛页），直接跑：
+
+```bash
+node bin/cli.mjs search 萃取率怎么调 --root examples/demo-wiki
+WIKI_ROOT="<仓库绝对路径>/examples/demo-wiki" node tools/verify-host.mjs --self
+```
+
+它存在的意思是：这套东西只认「目录 + `.md` + frontmatter」，不认领域 —— 换一个库不需要改一行代码。
+
 ---
 
 ## 配

@@ -184,15 +184,27 @@ async function probe(base) {
       : `HTTP ${ghost.status}（要 404）`,
   )
 
-  // 5) /search —— 顺带确认 considered 这种「客户端算不出来」的诊断字段还在
-  const search = await get(base, `/api/wiki-notes/search?q=${encodeURIComponent('逻辑填空')}`)
+  // 5) /search —— 顺带确认 considered 这种「客户端算不出来」的诊断字段还在。
+  //    查询词从库里现挑（枢纽页名，没有就用第一页），不写死某个库的内容 ——
+  //    写死的话换一个库来跑就只能测到「查不到」。
+  const probeQuery = typeof hub === 'string' && hub !== '' ? hub : '验收'
+  const search = await get(base, `/api/wiki-notes/search?q=${encodeURIComponent(probeQuery)}`)
   if (search.status === 200 && Array.isArray(search.body?.hits)) {
     const body = search.body
-    report('PASS', '/search', `${body.hits.length} 条命中 · 参与 ${body.considered ?? '?'} 页 · ${body.elapsedMs ?? '?'}ms`)
+    report('PASS', '/search', `「${probeQuery}」${body.hits.length} 条命中 · 参与 ${body.considered ?? '?'} 页 · ${body.elapsedMs ?? '?'}ms`)
     report(
       Number.isFinite(body.considered) ? 'PASS' : 'FAIL',
       '/search 诊断字段',
       `considered=${body.considered}（客户端算不出这个数，缺了说明宿主旧）`,
+    )
+    // 参与 0 页有两种原因：宿主旧（没有 considered）和「库根本没读到」。
+    // 后者会让上面两项显示成漂亮的「0 条命中」，所以必须单独判 —— 跳过和通过不该长得一样。
+    report(
+      Number.isFinite(body.considered) && body.considered > 0 ? 'PASS' : 'FAIL',
+      '/search 读到了库',
+      Number.isFinite(body.considered) && body.considered > 0
+        ? `参与 ${body.considered} 页`
+        : '参与 0 页 —— root 可能无效（Windows 上别传 /c/... 这种 MSYS 路径，要 C:/...）',
     )
   } else {
     report('FAIL', '/search', `HTTP ${search.status}`)
