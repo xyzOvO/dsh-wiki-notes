@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Knowledge Base",
+    "description": "Turns a local Markdown vault into four read-only tools the model can query. One call returns the full text of the matching section plus its source, so it no longer has to read an index and reopen pages. Three entry points: the book in the left sidebar, Settings → Knowledge Base, and the Knowledge Base tab in the right sidebar. Read-only, no network."
+  }
+}

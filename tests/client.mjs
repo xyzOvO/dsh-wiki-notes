@@ -94,8 +94,10 @@ const ctx = {
 
 moduleExports.apply(ctx)
 
-if (registrations.length !== 1) throw new Error(`期望注册 1 个 slot，实际 ${registrations.length}`)
-const { options, component } = registrations[0]
+const byName = (name) => registrations.filter((item) => item.options.name === name)
+
+if (byName('settings.section').length !== 1) throw new Error('settings.section 应该正好注册一次')
+const { options, component } = byName('settings.section')[0]
 console.log('✓ slot name:', options.name)
 console.log('✓ slot id:', options.id)
 console.log('✓ slot order:', options.order)
@@ -105,6 +107,37 @@ if (typeof component !== 'function') throw new Error('slot 组件不是函数')
 const tree = component({ sessionId: 'stub' })
 if (tree === null || typeof tree !== 'object') throw new Error('组件没有返回元素')
 console.log('✓ 组件可调用，根节点类型:', tree.type)
+
+// ---- 左侧栏：图标（sidebar.panellist）与面板本体（main）必须是一对 ----
+const panellist = byName('sidebar.panellist')[0]
+const main = byName('main')[0]
+if (panellist === undefined) throw new Error('没有往 sidebar.panellist 注册左侧栏图标')
+if (main === undefined) throw new Error('没有往 main 注册面板本体')
+// 这套机制里最难查的一种坏法：图标注册上了、main 的 key 对不上 ——
+// 结果是「点了没反应，而且不报错」。所以两处 id 用同一个常量，这里也钉住。
+if (panellist.options.id !== 'wiki-notes') throw new Error('面板 id 变了：' + panellist.options.id)
+if (main.options.key !== panellist.options.id) throw new Error('左侧栏 id 与 main 的 key 不一致')
+if (panellist.options.order !== 20) throw new Error('左侧栏顺序应为 20（排在插件 0 与自动化任务 10 之后）')
+if (typeof panellist.options.label !== 'function') throw new Error('左侧栏 label 必须是函数')
+if (panellist.options.label() !== '知识库') throw new Error('左侧栏标签不是「知识库」')
+console.log('✓ 左侧栏：panellist + main 共用 id', panellist.options.id, '· order', panellist.options.order)
+
+const iconTree = panellist.component({ size: 16, active: true })
+if (iconTree === null || typeof iconTree !== 'object' || iconTree.type !== 'svg') throw new Error('侧栏图标没画出 svg')
+if (!String(iconTree.props.stroke).includes('currentColor')) throw new Error('图标颜色应吃 currentColor，不能写死色值')
+console.log('✓ 侧栏图标：svg · currentColor · size 由宿主给')
+
+const panelTree = main.component({})
+if (panelTree === null || typeof panelTree !== 'object') throw new Error('面板组件没有返回元素')
+console.log('✓ 面板可调用，根节点:', panelTree.type, panelTree.props.className)
+for (const [label, needle] of [
+  ['检索页签复用同一个检索面板', "h(WikiSearchPanel, { compact: false })"],
+  ['调用记录以嵌入方式挂进面板', "h(WikiCallsSection, { embedded: true })"],
+  ['概览页签', 'h(WikiPanelStatus, {})'],
+]) {
+  if (!source.includes(needle)) throw new Error(`面板缺页签：${label}（找不到 ${needle}）`)
+  console.log('✓ 面板页签:', label)
+}
 
 // ---- 调用记录：是「知识库」页里的第二个页签，不是第二个一级入口 ----
 if (!source.includes("setTab('calls')")) throw new Error('知识库页里没有切到调用记录的页签')
@@ -121,6 +154,16 @@ const callGuards = [
   ['空态有话可说', '还没有调用记录'],
   ['轮询间隔 2 秒', 'CALLS_POLL_MS'],
   ['清空要二次确认，不弹系统对话框', '确认清空？'],
+  ['一页只放 10 条', 'var CALLS_PAGE_SIZE = 10'],
+  ['表格只渲染当页', "h('tbody', null, pageRows)"],
+  ['翻页脚写清楚第几条到第几条', 'wn-pager-info'],
+  ['换筛选条件页码归零', 'setPage(0)'],
+  ['页码越界要夹住，不能让列表凭空变空', 'Math.min(Math.max(page, 0), totalPages - 1)'],
+  ['时间列要带日期（不然翻页分不清昨天和刚才）', 'wn-calls-day'],
+  ['跨天那一行日期加深', 'wn-calls-day-new'],
+  ['诊断列', 'wn-calls-diag'],
+  ['零命中要归并成「反复打空的查询」', '反复打空的查询'],
+  ['账本字段说明跟着字段一起改', '账本只记这 13 个字段'],
 ]
 for (const [label, needle] of callGuards) {
   if (!source.includes(needle)) throw new Error(`缺少调用页实现：${label}（找不到 ${needle}）`)
