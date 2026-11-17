@@ -163,6 +163,40 @@ check('/page 读不存在的页有说明', ghost.json?.found === null || typeof 
 const afterGhost = await call('GET', '/state')
 check('读不存在的页不记访问', afterGhost.json?.visits?.length === 1, String(afterGhost.json?.visits?.length))
 
+// ---------- 10. /open：把文件交给系统打开 ----------
+// 这条路的意义是「点一行，那个 .md 真被编辑器打开」。测试里不能真弹窗，
+// 走 DSH_WIKI_OPEN_DRYRUN=1 —— 回的仍是同一份结构，所以除了「有没有真 spawn」以外
+// 全部行为都被钉住了：路径必须落在库内、文件必须存在、打开算一次访问。
+process.env.DSH_WIKI_OPEN_DRYRUN = '1'
+const openOne = await call('POST', '/open', JSON.stringify({ path: '资料-sources/资料页.md' }))
+check('/open 回 200', openOne.status === 200, String(openOne.status))
+check('/open 认出是哪一页', openOne.json?.name === '资料页', JSON.stringify(openOne.json))
+check('/open 走的是旁路（测试不弹窗）', openOne.json?.via === 'dryrun', JSON.stringify(openOne.json))
+check('/open 回报文件大小', typeof openOne.json?.bytes === 'number' && openOne.json.bytes > 0, JSON.stringify(openOne.json))
+
+const afterOpen = await call('GET', '/state')
+check('打开一页也算访问', afterOpen.json?.visits?.length === 2, String(afterOpen.json?.visits?.length))
+check('刚打开的那页排在最近访问第一位', afterOpen.json?.visits?.[0]?.name === '资料页', JSON.stringify(afterOpen.json?.visits?.[0]))
+
+const escape = await call('POST', '/open', JSON.stringify({ path: '../outside.md' }))
+check('/open 拒绝库外路径', escape.status === 400, String(escape.status))
+check('/open 拒绝时说明原因', typeof escape.json?.error === 'string' && escape.json.error.includes('库里'), JSON.stringify(escape.json))
+
+const absoluteEscape = await call('POST', '/open', JSON.stringify({ path: path.join(tmp, 'outside.md') }))
+check('/open 拒绝库外的绝对路径', absoluteEscape.status === 400, String(absoluteEscape.status))
+
+const ghostFile = await call('POST', '/open', JSON.stringify({ path: '概念-concepts/没有这一页.md' }))
+check('/open 文件不在回 404', ghostFile.status === 404, String(ghostFile.status))
+check('/open 文件不在要有话说', typeof ghostFile.json?.error === 'string' && ghostFile.json.error.includes('不在了'), JSON.stringify(ghostFile.json))
+
+const noPath = await call('POST', '/open', JSON.stringify({}))
+check('/open 缺 path 回 400', noPath.status === 400, String(noPath.status))
+
+const afterBad = await call('GET', '/state')
+check('打开失败不记访问', afterBad.json?.visits?.length === 2, String(afterBad.json?.visits?.length))
+delete process.env.DSH_WIKI_OPEN_DRYRUN
+
+
 process.stdout.write(`  overview ${total - failed}/${total}\n`)
 if (failed > 0) {
   process.stderr.write(`overview: ${failed} 项失败\n`)
