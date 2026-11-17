@@ -2,6 +2,19 @@
 
 本文件的体例：只记「对使用者有影响的行为变化」，不记内部重构。版本号遵循 semver，`0.x` 阶段不承诺兼容。
 
+## 1.10.1
+
+### 修 · `wiki_context` 长期「降级」其实是一个环境变量没传
+- 症状：每次 `wiki_context` 都返回 `degraded: true` / `degraded_sources: ["wiki_recall"]`，而 `status.support` 仍有值 —— 单看 `support` 会以为「库里的证据就这样」，实际是半个引擎在跑。
+- 根因在插件这侧：Python 管线的 `wiki_recall` 引擎是回头调本插件的 `node bin/cli.mjs search`（`context_builder.py` 的 `run_plugin`），它用环境变量 `WIKI_PLUGIN_DIR` 定位插件目录。插件调桥时只传了 `WIKI_OBSERVE_LOG`，于是 cwd 落在工具目录、`bin/cli.mjs` 不存在，stdout 空，那边 `json.loads('')` 抛 `Expecting value: line 1 column 1 (char 0)`，引擎判死。
+- 现在 `lib/index.js` 每次都传 `WIKI_PLUGIN_DIR`。修后实测：`engines` 两个都 `ok`，`degraded: false`，`degraded_sources: []`。
+- 加了一条源码守卫（`tests/bridge.mjs`）：假 python 的单元测试看不见这类故障 —— 它压根不调真管线，只有「必须传这个变量」的断言拦得住。
+
+### 新 · 两个体检脚本
+- `node tools/verify-bridge.mjs`：真起一次 Python 桥，逐项断言「两个引擎都活着 / 没被标降级 / 带回了证据 / observe 认得回来」。默认不传观察日志，所以不会往治理账本里写东西。
+- `node tools/verify-host.mjs --self`：在自己进程里用真入口起一个真 HTTP 服务，打 10 项探针（`/state` 版本指纹、`/links` 与它的 404、`/search`、`/open` 越界闸、`/calls` 字段数）。`--port <端口>` 探已在跑的 DSH。
+- 两个脚本都在仓库里而不进包（`files` 不变），`npm run verify:bridge` / `npm run verify:host` 也能跑。
+
 ## 1.10.0
 
 把「探索」这一窗补成能顺着走的：从标签走到相邻主题，从一页走到它指向的和指向它的。

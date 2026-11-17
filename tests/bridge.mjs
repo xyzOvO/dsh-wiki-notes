@@ -10,7 +10,7 @@
  * 所以把一个普通 JS 写成 `wiki_bridge.py` 就能当假桥用，测试不依赖本机装没装 Python。
  */
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 
@@ -177,4 +177,27 @@ const call = (toolsRoot, extra = {}) => runBridge({ command: 'ping', payload: { 
   assert.match(r.error.error.message, /stdin 写入也失败了/)
 }
 
-console.log('[bridge] 全部通过（11 项）')
+/**
+ * 源码守卫：`callBridge` 必须把 WIKI_PLUGIN_DIR 传给桥。
+ *
+ * 这条不是为了好看的 —— 2026-11-17 真机上 wiki_context 每次都挂
+ * `degraded:true / degraded_sources:["wiki_recall"]`，根因就是这里少一个环境变量：
+ * Python 管线的 wiki_recall 引擎回头调 `node bin/cli.mjs search`，
+ * `context_builder.py:38` 用 `os.environ.get("WIKI_PLUGIN_DIR","")` 定位插件目录，
+ * 不给就 cwd 落到工具目录 → bin/cli.mjs 不存在 → stdout 空 →
+ * 那边 `json.loads('')` 抛「Expecting value: line 1 column 1 (char 0)」→ 引擎判死。
+ * 假 python 的单元测试看不见这个，因为它根本不调真管线；只有这条源码守卫拦得住。
+ */
+{
+  const indexSource = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
+  assert.ok(
+    /WIKI_PLUGIN_DIR:\s*pluginRoot/.test(indexSource),
+    'lib/index.js 的 callBridge 没有把 WIKI_PLUGIN_DIR 传给桥：Python 管线的 wiki_recall 引擎会整条死掉，context 永远 degraded',
+  )
+  assert.ok(
+    !/env:\s*cfg\.observeLog \? \{ WIKI_OBSERVE_LOG: cfg\.observeLog \} : \{\}/.test(indexSource),
+    'lib/index.js 又回到「只传 WIKI_OBSERVE_LOG」的老写法了',
+  )
+}
+
+console.log('[bridge] 全部通过（13 项）')

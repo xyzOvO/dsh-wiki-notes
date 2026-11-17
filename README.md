@@ -90,6 +90,10 @@
 
 同时返回 `evidence`（证据页，含分级、支撑了哪个槽位）、`missing`（缺什么、为什么缺）、`conflicts`（冲突候选，**未裁决，别当成已确认的结论**）、`answer.contract_text`（给回答的约束：必须披露缺口、不得超出证据、引文须原文），以及一个 `context_id`。模型看到的渲染文本里，每张证据页最多再附 2 条原文引文（每条按槽位标注、裁到 220 字）；JSON 结构不变，引文仍是页面原文子串，不是插件替你概括的。
 
+`degraded` 为真时要先修通道，再谈结论。返回里的 `engines` 会写清每个通道的状态（`{"search":{"status":"ok"},"wiki_recall":{"status":"ok"}}`），`degraded_sources` 则点名是哪个死了。想直接体检这条通路，跑 `node tools/verify-bridge.mjs`：它真起一次 Python 管线，逐项断言「两个引擎都活着 / 没被标降级 / 带回了证据 / observe 认得回来」。
+
+> 2026-11-17 踩过的一个真实故障：`wiki_recall` 通道长期是死的，于是每次 `wiki_context` 都挂 `degraded:true`，而 `support` 看上去还有值 —— 单看 `support` 会以为「库里的证据就这样」。根因不在 Python 也不在检索，而是插件调桥时**少传了一个环境变量** `WIKI_PLUGIN_DIR`：管线的 `wiki_recall` 引擎是回头调本插件的 `node bin/cli.mjs search`（见 `context_builder.py` 的 `run_plugin`），拿不到插件目录就把 cwd 落在工具目录，`bin/cli.mjs` 不存在，stdout 空，那边 `json.loads('')` 抛错，引擎判死。现在 `lib/index.js` 每次都传它，`tests/bridge.mjs` 里有一条源码守卫盯着这行 —— 假 python 的单元测试看不见这种故障，因为它压根不调真管线。
+
 ### `wiki_verify` —— 核验回答
 
 写完答案后自查（尤其含数字、范围、年份、题量分值这类主张时）用它。参数：`context_id` + `answer`（可选 `observe_id`，一般不用传，插件会自动带上）。
@@ -393,6 +397,8 @@ lib/client.js   设置页 + 检索面板 + 右侧栏页签（手写 bundle，无
 bin/cli.mjs     命令行，不装插件也能跑
 tools/probe.mjs 检索质量探针：hit@1 / hit@3 / Recall@5，追加趋势 CSV
 tools/preview.mjs 把面板渲染成静态页（真组件 + 真 CSS），改样式不必重启 DSH
+tools/verify-host.mjs 宿主实机验收：--self 自己起个真 HTTP 服务打 10 项探针，--port 探已在跑的 DSH
+tools/verify-bridge.mjs 真管线体检：起一次 Python 桥，断言两个引擎都活着、没被标降级
 docs/库结构.md  库结构约定（这份才是一手文档）
 docs/README.md  文档导航页
 CHANGELOG.md    版本变更记录
@@ -413,6 +419,9 @@ WIKI_ROOT="/path/your/wiki" node tests/local/recall.mjs   # 质量评测：Recal
 npm run probe -- --root "/path/your/wiki"          # 攒一行检索质量趋势
 node tools/preview.mjs                             # 出 preview/panel.html，浏览器直接看面板
 node tools/preview.mjs --diag                      # 同上，并量一遍宽度 / 截断 / 溢出 / 对比度
+node tools/verify-host.mjs --self                  # 宿主验收：本进程起真 HTTP 服务，打 10 项探针
+node tools/verify-host.mjs --port 63123            # 探已在跑的 DSH（改完宿主没重启时，会在这几项上红）
+node tools/verify-bridge.mjs                       # 真管线体检：两个引擎都得是 ok，degraded 得是 false
 ```
 
 `tests/local/` 那套要先把 `queries.example.json` 复制成 `queries.json` 再按自己的库改（`expect` 写「必须进前 5 的页名」，由人标，不依赖任何旧引擎的输出）。基线文件 `ab_baseline.json` 也是本地产物，重导用 `python ab_export.py > ab_baseline.json`。
