@@ -109,6 +109,15 @@ check('断链目标 1 处（同名不重复计）', ov?.problems?.brokenTotal ==
 check('断链涉及 1 页', ov?.problems?.brokenPages === 1, String(ov?.problems?.brokenPages))
 check('超大页 0', ov?.problems?.oversized === 0, String(ov?.problems?.oversized))
 
+// ---------- 5. 使用情况：读的就是调用账本那一本 ----------
+const usage = state.json?.usage
+check('使用情况对象存在', usage !== null && typeof usage === 'object', JSON.stringify(usage))
+check('账本一开始是空的', usage?.rows === 0, String(usage?.rows))
+check('四类工具都列出来（没调过也要有 0）', Array.isArray(usage?.byTool) && usage.byTool.length === 4, JSON.stringify(usage?.byTool))
+check('模型调用 0', usage?.bySource?.model === 0, JSON.stringify(usage?.bySource))
+check('面板手动查的 0', usage?.bySource?.panel === 0, JSON.stringify(usage?.bySource))
+check('零命中率分母为 0 时是 null，不是 0', usage?.zeroRate === null, String(usage?.zeroRate))
+
 // ---------- 5. 主题与标签 ----------
 check('标签种数 = 3（测试 / 标签A / 冷门）', ov?.tagTotal === 3, String(ov?.tagTotal))
 check('「测试」计 2 页', byTag(ov?.tags, '测试')?.count === 2, JSON.stringify(byTag(ov?.tags, '测试')))
@@ -164,6 +173,16 @@ check('/open 回报文件大小', typeof openOne.json?.bytes === 'number' && ope
 // 打开文件不再记访问：最近访问那一栏已经撤了，留下的账本没人读就是白写。
 const afterOpen = await call('GET', '/state')
 check('打开文件不写任何账本', afterOpen.json?.visits === undefined, JSON.stringify(afterOpen.json?.visits))
+
+// 面板里手动查一次：这一笔必须记成 source=panel，不能算成模型用过知识库
+await call('GET', '/search?q=' + encodeURIComponent('甲页'))
+const afterSearch = await call('GET', '/state')
+const usage2 = afterSearch.json?.usage
+check('手动查一次，账本多一条', usage2?.rows === 1, String(usage2?.rows))
+check('来源记成 panel', usage2?.bySource?.panel === 1, JSON.stringify(usage2?.bySource))
+check('模型那栏不动', usage2?.bySource?.model === 0, JSON.stringify(usage2?.bySource))
+check('工具那栏记在 wiki_recall 上', usage2?.byTool?.[0]?.count === 1, JSON.stringify(usage2?.byTool))
+check('零命中率有分母了', usage2?.hitsKnown === 1 && typeof usage2?.zeroRate === 'number', JSON.stringify({ known: usage2?.hitsKnown, rate: usage2?.zeroRate }))
 
 const escape = await call('POST', '/open', JSON.stringify({ path: '../outside.md' }))
 check('/open 拒绝库外路径', escape.status === 400, String(escape.status))

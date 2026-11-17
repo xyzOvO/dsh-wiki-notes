@@ -131,7 +131,7 @@ const panelTree = main.component({})
 if (panelTree === null || typeof panelTree !== 'object') throw new Error('面板组件没有返回元素')
 console.log('✓ 面板可调用，根节点:', panelTree.type, panelTree.props.className)
 for (const [label, needle] of [
-  ['检索页签复用同一个检索面板', "h(WikiSearchPanel, { compact: false })"],
+  ['检索页签复用同一个检索面板', "h(WikiSearchPanel, { compact: false, seed: seed.text, seedSeq: seed.seq })"],
   ['调用记录以嵌入方式挂进面板', "h(WikiCallsSection, { embedded: true })"],
   ['概览页签', 'h(WikiPanelStatus, {'],
   ['概览页签把「搜索」按钮接回检索', "onSearch: function () {"],
@@ -145,8 +145,7 @@ for (const [label, needle] of [
 // 页签清单：概览是首页，其余各自成窗。挤在一起就是「六块数字一屏小字」。
 for (const [label, needle] of [
   ['概览排第一', "['overview', '概览']"],
-  ['标签独立成窗', "['tags', '标签']"],
-  ['关系独立成窗', "['relations', '关系']"],
+  ['标签与关系合成「探索」', "['explore', '探索']"],
   ['调用记录仍在', "['calls', '调用记录']"],
   ['检索仍在', "['search', '检索']"],
 ]) {
@@ -154,7 +153,7 @@ for (const [label, needle] of [
 }
 // 首页只许摆这六块：多余的（页面清单 / 标签 / 关系）得挪到各自的窗里
 const overviewLine = source.slice(source.indexOf('overview: ['), source.indexOf('],', source.indexOf('overview: [')))
-for (const banned of ['tagsSection', 'relationsSection']) {
+for (const banned of ['tagsSection', 'relationsSection', 'exploreSection']) {
   if (overviewLine.includes(banned)) throw new Error(`概览首页里还塞着 ${banned} —— 它应该在自己的窗里`)
 }
 if (!overviewLine.includes('quickSection')) throw new Error('概览首页少了快捷操作')
@@ -732,6 +731,24 @@ const fakeState = {
       orphanSample: [{ name: '孤岛页', file: '概念-concepts/孤岛页.md' }],
     },
   },
+  // 使用情况：宿主算好的那份，前端只摆不算
+  usage: {
+    ok: true,
+    rows: 7,
+    byTool: [
+      { tool: 'wiki_recall', count: 5 },
+      { tool: 'wiki_context', count: 2 },
+      { tool: 'wiki_verify', count: 0 },
+      { tool: 'wiki_observe', count: 0 },
+    ],
+    bySource: { model: 5, panel: 2, other: 0 },
+    enabled: true,
+    hitsKnown: 5,
+    zeroHit: 2,
+    zeroRate: 0.4,
+    lastAt: '2026-11-17T18:02:11',
+    today: { today: '2026-11-17', calls: 3, hits: 2, misses: 1, hitRate: 2 / 3 },
+  },
 }
 
 const overviewTree = JSON.stringify(previewApi.WikiPanelStatus({ data: fakeState, onSearch: function () {} }))
@@ -741,16 +758,25 @@ for (const [label, needle] of [
   ['小节数的数字来自数据', '"40"'],
   ['断链处数来自数据', '"2"'],
   ['状态文案来自 connection', '已连接'],
+  ['使用情况：块在', '使用情况'],
+  ['使用情况：模型调用数来自 usage', '"5"'],
+  ['使用情况：面板手动查的数来自 usage', '"2"'],
+  ['使用情况：零命中率换算成百分数', '40%'],
+  ['使用情况：最近一次用墙钟切', '11-17 18:02'],
+  ['使用情况：按工具的四个数都摆出来', 'wiki_recall 5'],
 ]) {
   if (!overviewTree.includes(needle)) throw new Error(`概览没把数据摆出来：${label}（找不到 ${needle}）`)
 }
 // 喂了 data 就不该显示「正在读库状态」——否则静态预览会被截成一张空态图
 if (overviewTree.includes('正在读库状态')) throw new Error('给了 data 仍在显示读取中')
 
-// 一次只出一个窗：首页摆六块，标签和关系各在自己的页签里
-const viewTree = (view) => JSON.stringify(previewApi.WikiPanelStatus({ data: fakeState, view: view, onSearch: function () {} }))
+// 一次只出一个窗：首页摆五块，标签和关系同住「探索」窗，靠子页签切换
+const viewTree = (view, explore) =>
+  JSON.stringify(previewApi.WikiPanelStatus({ data: fakeState, view: view, explore: explore, onSearch: function () {} }))
 const shown = {
   overview: viewTree('overview'),
+  exploreTags: viewTree('explore', 'tags'),
+  exploreRelations: viewTree('explore', 'relations'),
   tags: viewTree('tags'),
   relations: viewTree('relations'),
 }
@@ -759,6 +785,7 @@ for (const [label, needle] of [
   ['首页有索引状态', '索引状态'],
   ['首页有内容问题', '内容问题'],
   ['首页有快捷操作', '快捷操作'],
+  ['首页有使用情况', '使用情况'],
 ]) {
   if (!shown.overview.includes(needle)) throw new Error(`概览首页缺块：${label}`)
 }
@@ -766,6 +793,11 @@ for (const [label, needle] of [
 for (const banned of ['主题与标签', '知识关系']) {
   if (shown.overview.includes(banned)) throw new Error(`概览首页不该出现「${banned}」—— 它有自己的窗`)
 }
+if (!shown.exploreTags.includes('主题与标签')) throw new Error('探索窗的标签子页没画标签')
+if (!shown.exploreTags.includes('知识探索')) throw new Error('探索窗缺子页签条')
+if (shown.exploreTags.includes('知识关系')) throw new Error('标签子页里混进了关系榜 —— 切过去才该看见')
+if (!shown.exploreRelations.includes('枢纽页')) throw new Error('探索窗的关系子页缺枢纽页')
+if (shown.exploreRelations.includes('主题与标签')) throw new Error('关系子页里混进了标签榜')
 if (!shown.tags.includes('主题与标签')) throw new Error('标签窗没画标签')
 if (!shown.tags.includes('示例标签')) throw new Error('标签窗没把宿主的标签摆出来')
 if (shown.tags.includes('可检索页面')) throw new Error('标签窗把首页的六块又抄了一遍')
@@ -773,6 +805,29 @@ if (!shown.relations.includes('知识关系')) throw new Error('关系窗没画�
 if (!shown.relations.includes('枢纽页')) throw new Error('关系窗缺枢纽页')
 if (!shown.relations.includes('缺的那页')) throw new Error('关系窗缺断链目标')
 if (shown.relations.includes('可检索页面')) throw new Error('关系窗把首页的六块又抄了一遍')
+// 标签 chips 是入口，不是装饰：点一下就该带着这个词跳去检索
+for (const [label, needle] of [
+  ['标签可点（onPickTag）', 'props.onPickTag(String(item.tag))'],
+  ['标签按钮有提示', "title: '用「' + String(item.tag) + '」去检索'"],
+  ['标签按钮套了可点样式', 'hx-chip hx-chip-btn'],
+  ['检索面板收 seed', 'seedSeq: seed.seq'],
+  ['种子按序号判重（同一个词点两次也会重跑）', 'if (seedRef.current === seedSeq) return'],
+]) {
+  if (!source.includes(needle)) throw new Error(`标签→检索联动缺件：${label}（找不到 ${needle}）`)
+}
+console.log('✓ 标签→检索联动：点标签带着词跳过去')
+
+// 零命中时得能看见「最接近的几页」—— 0 命中在界面上和「库里没这块」长得一样
+for (const [label, needle] of [
+  ['零命中读宿主的 nearMiss', 'Array.isArray(result.nearMiss)'],
+  ['蹭边那几页有标题', "'最接近的 '"],
+  ['被过滤掉的候选要标出来', "'被过滤'"],
+  ['点一条就按它的措辞重搜', 'runSearch(String(item.name))'],
+]) {
+  if (!source.includes(needle)) throw new Error(`零命中沾边缺件：${label}（找不到 ${needle}）`)
+}
+console.log('✓ 零命中：摆出最接近的几页，并说明它们不等于答案')
+
 // 撤掉的两样东西不许借着别的名字溜回来
 for (const [label, needle] of [
   ['「最近访问」块', '最近访问'],

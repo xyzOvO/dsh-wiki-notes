@@ -516,9 +516,7 @@ function pageShell(h, preview, data, options) {
   const TAB_LABELS = [
     ['overview', '概览'],
     ['search', '检索'],
-    ['pages', '页面'],
-    ['tags', '标签'],
-    ['relations', '关系'],
+    ['explore', '探索'],
     ['calls', '调用记录'],
   ]
   const tabBar = `<div class="wn-tabs" role="tablist" aria-label="知识库分页">${TAB_LABELS.map(
@@ -527,17 +525,21 @@ function pageShell(h, preview, data, options) {
         item[0] === active ? ' wn-tab-on' : ''
       }">${item[1]}</button>`,
   ).join('')}</div>`
-  const renderedView =
-    active === 'overview' || active === 'pages' || active === 'tags' || active === 'relations'
-      ? active
-      : null
+  const renderedView = active === 'overview' || active === 'explore' ? active : null
   const body =
     active === 'search'
       ? panelShell(h, preview, data, { compact: false, query: opts.query })
       : renderedView !== null && preview && typeof preview.WikiPanelStatus === 'function'
         ? // 概览/页面/标签/关系都走真组件：给了 --state 就用那份数据（文档截图必须用中性样例），
           // 没给就退回活库的 /state。组件收到 data 就不再打接口，静态渲染不会卡在「读取中」。
-          render(h(preview.WikiPanelStatus, { view: renderedView, data: opts.state ?? null, onSearch: function () {} }))
+          render(
+            h(preview.WikiPanelStatus, {
+              view: renderedView,
+              explore: opts.explore,
+              data: opts.state ?? null,
+              onSearch: function () {},
+            }),
+          )
         : `<div class="wn-panel wn-panel-compact"><div class="wn-card"><div class="wn-card-head"><span class="wn-card-title">调用记录</span></div><div class="wn-dim">这个页签在静态预览里不展开 —— 它读的是 /calls 的实时数据，写死一份就等于又画一张假的。</div></div></div>`
   const book = preview && preview.WikiPanelIcon ? render(h(preview.WikiPanelIcon, { size: 18, active: true })) : ''
   const rail = `<div class="preview-rail"><span class="preview-rail-item preview-rail-on">${book}</span><span class="preview-rail-item"><i class="preview-rail-ph"></i></span><span class="preview-rail-item"><i class="preview-rail-ph"></i></span></div>`
@@ -586,11 +588,13 @@ const frames = [
   ],
   [
     'tags',
-    () => `<div class="preview-frame">${pageShell(h, preview, sample, { tab: 'tags', state: stateSample })}</div>`,
+    () =>
+      `<div class="preview-frame">${pageShell(h, preview, sample, { tab: 'explore', explore: 'tags', state: stateSample })}</div>`,
   ],
   [
     'relations',
-    () => `<div class="preview-frame">${pageShell(h, preview, sample, { tab: 'relations', state: stateSample })}</div>`,
+    () =>
+      `<div class="preview-frame">${pageShell(h, preview, sample, { tab: 'explore', explore: 'relations', state: stateSample })}</div>`,
   ],
   ['settings', () => frame('设置页 · 有结果', 'preview-settings', panelShell(h, preview, sample, { open: 0, query: QUERY }))],  ['sidebar', () => frame('右侧栏 · 有结果', 'preview-sidebar', sidebarShell(h, preview, sample, { compact: true, query: QUERY }))],
   [
