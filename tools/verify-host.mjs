@@ -55,7 +55,9 @@ function report(kind, name, detail) {
  * 配置/账本/观察账本全走临时目录，只有知识库是真的 —— 探针要打真库才有意义。
  */
 async function bootSelf() {
-  const root = process.env.WIKI_ROOT ?? 'D:/笔记/LLM-Wiki/知识层-wiki'
+  // 默认拿随包的示例库，而不是作者本机那本笔记：这个脚本要能给别人跑。
+  // 想探自己的库就 WIKI_ROOT=... 显式给。
+  const root = process.env.WIKI_ROOT ?? path.join(import.meta.dirname, '..', 'examples', 'demo-wiki')
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'wiki-notes-verify-'))
   const configFile = path.join(tmp, 'wiki-notes.config.json')
   writeFileSync(configFile, JSON.stringify({ root }, null, 2), 'utf8')

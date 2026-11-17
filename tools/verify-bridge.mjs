@@ -36,7 +36,7 @@ function argOf(name, fallback) {
   return next === undefined || next.startsWith('--') ? true : next
 }
 
-const query = typeof argOf('query', '') === 'string' && argOf('query', '') !== '' ? argOf('query', '') : '行测 各模块 用时 效率'
+const query = typeof argOf('query', '') === 'string' && argOf('query', '') !== '' ? argOf('query', '') : '萃取率 研磨度'
 const asJson = argOf('json', false) === true
 const withObserveLog = argOf('observe-log', false) === true
 

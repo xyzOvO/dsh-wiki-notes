@@ -44,11 +44,11 @@ writeFileSync(join(wiki, 'index.md'), '- [[逻辑]]：只讲了逻辑两个字\n
 // 两页各只沾到查询里的一小块 —— 单独看都不足以判「命中」，合起来正好是「差一点」。
 writeFileSync(
   join(wiki, '概念-concepts', '逻辑.md'),
-  '---\n类型: 概念\n状态: 已提纯\n标签: [行测]\n更新: 2026-01-01\n---\n\n# 逻辑\n\n## 结论\n\n逻辑。\n',
+  '---\n类型: 概念\n状态: 已提纯\n标签: [示例]\n更新: 2026-01-01\n---\n\n# 逻辑\n\n## 结论\n\n逻辑。\n',
 )
 writeFileSync(
   join(wiki, '概念-concepts', '填空.md'),
-  '---\n类型: 概念\n状态: 已提纯\n标签: [行测]\n更新: 2026-01-02\n---\n\n# 填空\n\n## 结论\n\n填空。\n',
+  '---\n类型: 概念\n状态: 已提纯\n标签: [示例]\n更新: 2026-01-02\n---\n\n# 填空\n\n## 结论\n\n填空。\n',
 )
 writeFileSync(
   join(wiki, '资料-sources', '无关资料.md'),
