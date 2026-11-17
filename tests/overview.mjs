@@ -19,10 +19,6 @@ const tmp = mkdtempSync(path.join(os.tmpdir(), 'wiki-notes-overview-'))
 process.env.DSH_WIKI_CONFIG = path.join(tmp, 'wiki-notes.config.json')
 process.env.DSH_WIKI_CALLS_LOG = path.join(tmp, 'calls.jsonl')
 process.env.DSH_WIKI_GOVERNANCE_LOG = path.join(tmp, 'governance.jsonl')
-// 访问账本指到临时目录：测试不许往插件目录里写「最近访问」
-const visitsProbe = path.join(tmp, 'visits.jsonl')
-process.env.DSH_WIKI_VISITS_LOG = visitsProbe
-
 const wiki = path.join(tmp, 'wiki')
 mkdirSync(path.join(wiki, '概念-concepts'), { recursive: true })
 mkdirSync(path.join(wiki, '资料-sources'), { recursive: true })
@@ -92,7 +88,6 @@ const ov = state.json?.overview
 check('/state 回 200', state.status === 200, String(state.status))
 check('三态字段：已连接', state.json?.connection === 'connected', String(state.json?.connection))
 check('概览对象存在', ov !== null && typeof ov === 'object', JSON.stringify(ov))
-check('最近访问是数组', Array.isArray(state.json?.visits), JSON.stringify(state.json?.visits))
 
 // ---------- 2. 页面数量 ----------
 check('总页数 = 4', ov?.pages?.all === 4, String(ov?.pages?.all))
@@ -125,43 +120,35 @@ check('标签列表不超过 12 条', Array.isArray(ov?.tags) && ov.tags.length 
 // 甲页 → 乙页、乙页 →（别名）甲页：两条链接；指向不存在的页不算「关系」，算内容问题。
 check('链接数 = 2', ov?.relations?.links === 2, String(ov?.relations?.links))
 check('孤岛 = 2（资料页 + 孤岛页）', ov?.relations?.orphans === 2, String(ov?.relations?.orphans))
-check('孤岛样本里没有靠别名被链到的甲页', !(ov?.relations?.orphanSample ?? []).includes('甲页'), JSON.stringify(ov?.relations?.orphanSample))
+check(
+  '孤岛样本里没有靠别名被链到的甲页',
+  !(ov?.relations?.orphanSample ?? []).map((item) => item.name).includes('甲页'),
+  JSON.stringify(ov?.relations?.orphanSample),
+)
+// 孤岛行在界面上要能点开：只给页名的话客户端只能猜路径，猜错就是「点了没反应」。
+check(
+  '孤岛样本带文件路径',
+  (ov?.relations?.orphanSample ?? []).every((item) => typeof item.file === 'string' && item.file !== ''),
+  JSON.stringify(ov?.relations?.orphanSample),
+)
+check(
+  '枢纽页带文件路径',
+  (ov?.relations?.hubPages ?? []).every((item) => typeof item.file === 'string' && item.file !== ''),
+  JSON.stringify(ov?.relations?.hubPages),
+)
 check('枢纽第一是乙页或甲页（入链 1）', (ov?.relations?.hubPages ?? []).length === 2, JSON.stringify(ov?.relations?.hubPages))
 check('枢纽页带 inlinks 数字', (ov?.relations?.hubPages ?? []).every((item) => item.inlinks === 1), JSON.stringify(ov?.relations?.hubPages))
 check('最该先补的页 = 不存在页', ov?.relations?.brokenTargets?.[0]?.name === '不存在页', JSON.stringify(ov?.relations?.brokenTargets))
 check('断链目标带出现次数', ov?.relations?.brokenTargets?.[0]?.count === 1, JSON.stringify(ov?.relations?.brokenTargets))
 
-// ---------- 7. 全部页面清单 ----------
-const pagesRoute = await call('GET', '/pages')
-check('/pages 回 200', pagesRoute.status === 200, String(pagesRoute.status))
-check('/pages 总数 = 4', pagesRoute.json?.total === 4, String(pagesRoute.json?.total))
-check('/pages 每行带类型', (pagesRoute.json?.pages ?? []).every((item) => typeof item.type === 'string'), JSON.stringify(pagesRoute.json?.pages))
-const names = (pagesRoute.json?.pages ?? []).map((item) => item.name)
-check('/pages 按页名排好序', JSON.stringify(names) === JSON.stringify([...names].sort((a, b) => a.localeCompare(b, 'zh'))), JSON.stringify(names))
-
-// ---------- 8. /page 读完一页 = 一条访问记录 ----------
-const readOne = await call('GET', '/page?name=' + encodeURIComponent('乙页'))
-check('/page 回 200', readOne.status === 200, String(readOne.status))
-check('/page 读到正文', typeof readOne.json?.found?.body === 'string' && readOne.json.found.body.includes('回看'), JSON.stringify(readOne.json?.found?.name))
-
-const afterRead = await call('GET', '/state')
-check('读完一页后最近访问多出一条', Array.isArray(afterRead.json?.visits) && afterRead.json.visits.length === 1, String(afterRead.json?.visits?.length))
-check('访问记录指向刚读的那一页', afterRead.json?.visits?.[0]?.name === '乙页', JSON.stringify(afterRead.json?.visits?.[0]))
-check('访问来源是 panel', afterRead.json?.visits?.[0]?.source === 'panel', JSON.stringify(afterRead.json?.visits?.[0]))
-
-// 同一页再读一次：不该变成两条（去重按页名，留最新那条）
-await call('GET', '/page?name=' + encodeURIComponent('乙页'))
-const afterTwice = await call('GET', '/state')
-check('同一页读两次仍只占一条', afterTwice.json?.visits?.length === 1, String(afterTwice.json?.visits?.length))
-
-// ---------- 9. /page 的坏输入 ----------
-const noName = await call('GET', '/page')
-check('/page 缺 name 回 400', noName.status === 400, String(noName.status))
-const ghost = await call('GET', '/page?name=' + encodeURIComponent('根本没有这一页'))
-check('/page 读不存在的页回 200', ghost.status === 200, String(ghost.status))
-check('/page 读不存在的页有说明', ghost.json?.found === null || typeof ghost.json?.note === 'string', JSON.stringify(ghost.json))
-const afterGhost = await call('GET', '/state')
-check('读不存在的页不记访问', afterGhost.json?.visits?.length === 1, String(afterGhost.json?.visits?.length))
+// ---------- 7. 「页面」那一窗连同两条路由一起撤了 ----------
+// 人读笔记是去自己的 markdown 编辑器：面板再给一份清单、再展开一次正文，
+// 只是把同一件事做第二遍。撤掉之后这两条路由必须真的没了（404 不是 200 空数组）。
+const gonePages = await call('GET', '/pages')
+check('/pages 已撤掉', gonePages.status === 404, String(gonePages.status))
+const gonePage = await call('GET', '/page?name=' + encodeURIComponent('乙页'))
+check('/page 已撤掉', gonePage.status === 404, String(gonePage.status))
+check('/state 不再带最近访问', state.json?.visits === undefined, JSON.stringify(state.json?.visits))
 
 // ---------- 10. /open：把文件交给系统打开 ----------
 // 这条路的意义是「点一行，那个 .md 真被编辑器打开」。测试里不能真弹窗，
@@ -174,9 +161,9 @@ check('/open 认出是哪一页', openOne.json?.name === '资料页', JSON.strin
 check('/open 走的是旁路（测试不弹窗）', openOne.json?.via === 'dryrun', JSON.stringify(openOne.json))
 check('/open 回报文件大小', typeof openOne.json?.bytes === 'number' && openOne.json.bytes > 0, JSON.stringify(openOne.json))
 
+// 打开文件不再记访问：最近访问那一栏已经撤了，留下的账本没人读就是白写。
 const afterOpen = await call('GET', '/state')
-check('打开一页也算访问', afterOpen.json?.visits?.length === 2, String(afterOpen.json?.visits?.length))
-check('刚打开的那页排在最近访问第一位', afterOpen.json?.visits?.[0]?.name === '资料页', JSON.stringify(afterOpen.json?.visits?.[0]))
+check('打开文件不写任何账本', afterOpen.json?.visits === undefined, JSON.stringify(afterOpen.json?.visits))
 
 const escape = await call('POST', '/open', JSON.stringify({ path: '../outside.md' }))
 check('/open 拒绝库外路径', escape.status === 400, String(escape.status))
@@ -191,9 +178,6 @@ check('/open 文件不在要有话说', typeof ghostFile.json?.error === 'string
 
 const noPath = await call('POST', '/open', JSON.stringify({}))
 check('/open 缺 path 回 400', noPath.status === 400, String(noPath.status))
-
-const afterBad = await call('GET', '/state')
-check('打开失败不记访问', afterBad.json?.visits?.length === 2, String(afterBad.json?.visits?.length))
 delete process.env.DSH_WIKI_OPEN_DRYRUN
 
 

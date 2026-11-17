@@ -145,7 +145,6 @@ for (const [label, needle] of [
 // 页签清单：概览是首页，其余各自成窗。挤在一起就是「六块数字一屏小字」。
 for (const [label, needle] of [
   ['概览排第一', "['overview', '概览']"],
-  ['页面独立成窗', "['pages', '页面']"],
   ['标签独立成窗', "['tags', '标签']"],
   ['关系独立成窗', "['relations', '关系']"],
   ['调用记录仍在', "['calls', '调用记录']"],
@@ -155,11 +154,13 @@ for (const [label, needle] of [
 }
 // 首页只许摆这六块：多余的（页面清单 / 标签 / 关系）得挪到各自的窗里
 const overviewLine = source.slice(source.indexOf('overview: ['), source.indexOf('],', source.indexOf('overview: [')))
-for (const banned of ['tagsSection', 'relationsSection', 'pagesSection']) {
+for (const banned of ['tagsSection', 'relationsSection']) {
   if (overviewLine.includes(banned)) throw new Error(`概览首页里还塞着 ${banned} —— 它应该在自己的窗里`)
 }
 if (!overviewLine.includes('quickSection')) throw new Error('概览首页少了快捷操作')
-console.log('✓ 页签：概览做首页，标签/关系/页面各自成窗')
+// 「页面」那一窗撤了：读笔记去你自己的 markdown 编辑器，面板再抄一份没有意义。
+if (source.includes("['pages', '页面']")) throw new Error('「页面」页签应该已经撤掉')
+console.log('✓ 页签：概览做首页，标签/关系各自成窗（无「页面」）')
 
 // ---- 调用记录：是「知识库」页里的第二个页签，不是第二个一级入口 ----
 if (!source.includes("setTab('calls')")) throw new Error('知识库页里没有切到调用记录的页签')
@@ -645,24 +646,18 @@ for (const [label, needle] of [
   ['索引时间用宿主字段', 'index.scannedAt'],
   ['索引耗时用宿主字段', 'index.scannedMs'],
   ['内容问题用宿主字段', 'problems.brokenTotal'],
-  ['最近访问用宿主账本', 'data.visits'],
   ['主题与标签用宿主聚合', 'ov.tags'],
   ['知识关系用宿主聚合', 'relations.hubPages'],
   ['快捷操作：搜索', 'props.onSearch'],
-  ['快捷操作：查看全部页面', '查看全部页面'],
-  ['全部页面走 /pages', "'/pages'"],
-  ['读一页走 /page', "'/page?name='"],
+  ['快捷操作：重新扫描', '重新扫描'],
   ['状态三态文案', '已连接'],
   ['状态三态文案：未配置', '未配置'],
   ['状态三态文案：不可用', '不可用'],
-  ['读一页顺手刷新最近访问', "apiGet('/state', SCAN_TIMEOUT_MS)"],
   // 点一行 = 打开那个 .md（/open）。只做「在面板里读」的话，人拿到的是读得了、
   // 改不了的正文，还接不上笔记软件 —— 这条守卫就是防止它退回去。
   ['点一行就走 /open 打开文件', "apiPost('/open'"],
-  ['最近访问的行带文件路径', 'openFile(visit.file, visit.name)'],
-  ['页面清单的行也带文件路径', 'openFile(row.file, row.name)'],
+  ['关系榜的行带文件路径', 'openFile(item.file, item.name)'],
   ['打开失败要说人话', '打不开这个文件'],
-  ['在面板里读是第二选择（「读」按钮）', "'hx-row-act'"],
   ['概览里不放路径输入框（只读）', '这一页只读'],
   // 宿主是旧进程时 overview 缺席，数字只能是「—」。一句不解释，人只会以为库空了。
   ['宿主没给 overview 时说明要重启', '重启一次 DSH'],
@@ -723,7 +718,6 @@ const fakeState = {
   stats: { scannedMs: 42 },
   topics: [],
   prompt: { enabled: true },
-  visits: [{ ts: '2026-11-17T17:20:00', name: '示例页面一', file: '概念-concepts/示例页面一.md', source: 'panel' }],
   overview: {
     pages: { all: 12, searchable: 11, resources: 5, sections: 40, bytes: 921600 },
     index: { scannedAt: isoZ, scannedMs: 42, discovered: 12, skipped: 0 },
@@ -733,9 +727,9 @@ const fakeState = {
     relations: {
       links: 7,
       orphans: 2,
-      hubPages: [{ name: '枢纽页', inlinks: 3 }],
+      hubPages: [{ name: '枢纽页', file: '概念-concepts/枢纽页.md', inlinks: 3 }],
       brokenTargets: [{ name: '缺的那页', count: 2 }],
-      orphanSample: ['孤岛页'],
+      orphanSample: [{ name: '孤岛页', file: '概念-concepts/孤岛页.md' }],
     },
   },
 }
@@ -746,7 +740,6 @@ for (const [label, needle] of [
   ['资料页面的数字来自数据', '"5"'],
   ['小节数的数字来自数据', '"40"'],
   ['断链处数来自数据', '"2"'],
-  ['最近访问来自数据', '示例页面一'],
   ['状态文案来自 connection', '已连接'],
 ]) {
   if (!overviewTree.includes(needle)) throw new Error(`概览没把数据摆出来：${label}（找不到 ${needle}）`)
@@ -765,13 +758,12 @@ for (const [label, needle] of [
   ['首页有页面数量', '可检索页面'],
   ['首页有索引状态', '索引状态'],
   ['首页有内容问题', '内容问题'],
-  ['首页有最近访问', '最近访问'],
   ['首页有快捷操作', '快捷操作'],
 ]) {
   if (!shown.overview.includes(needle)) throw new Error(`概览首页缺块：${label}`)
 }
 // 「查看全部页面」这颗按钮属于快捷操作，留下；清单本身（带「按页名筛…」的那个框）不该在首页
-for (const banned of ['主题与标签', '知识关系', '按页名筛']) {
+for (const banned of ['主题与标签', '知识关系']) {
   if (shown.overview.includes(banned)) throw new Error(`概览首页不该出现「${banned}」—— 它有自己的窗`)
 }
 if (!shown.tags.includes('主题与标签')) throw new Error('标签窗没画标签')
@@ -781,9 +773,17 @@ if (!shown.relations.includes('知识关系')) throw new Error('关系窗没画�
 if (!shown.relations.includes('枢纽页')) throw new Error('关系窗缺枢纽页')
 if (!shown.relations.includes('缺的那页')) throw new Error('关系窗缺断链目标')
 if (shown.relations.includes('可检索页面')) throw new Error('关系窗把首页的六块又抄了一遍')
-console.log('✓ 概览/标签/关系：一个组件四个窗，各摆各的')
+// 撤掉的两样东西不许借着别的名字溜回来
+for (const [label, needle] of [
+  ['「最近访问」块', '最近访问'],
+  ['页面清单的筛选框', '按页名筛'],
+  ['面板内读正文的按钮', '在面板里读'],
+]) {
+  if (source.includes(needle)) throw new Error(`已撤掉的 ${label} 又回来了（${needle}）`)
+}
+console.log('✓ 概览/标签/关系：一个组件三个窗，各摆各的')
 const staleTree = JSON.stringify(
-  previewApi.WikiPanelStatus({ data: { connection: 'connected', ok: true, root: 'D:/示例', stats: {}, visits: [] }, onSearch: function () {} }),
+  previewApi.WikiPanelStatus({ data: { connection: 'connected', ok: true, root: 'D:/示例', stats: {} }, onSearch: function () {} }),
 )
 if (!staleTree.includes('重启一次 DSH')) throw new Error('宿主没给 overview 时没有说明要重启')
 if (!staleTree.includes('hx-stale')) throw new Error('退化提示没套样式，会混在正文里看不出来')

@@ -34,7 +34,6 @@ lint-history.json
 calls.jsonl
 
 # 访问账本：记的是这台机器上谁先读了哪一页，同样不进仓库
-visits.jsonl
 
 # 治理观察事件账本：机器本地产物，和 calls.jsonl 一样不进发布包
 governance.jsonl
