@@ -137,6 +137,14 @@ for (const [label, needle] of [
   ['概览页签把「搜索」按钮接回检索', "onSearch: function () {"],
   ['概览是首页（默认页签就是它）', "var tabTuple = useState('overview')"],
   ['概览按 view 出窗，不是四个组件各读一遍 /state', "typeof props.view === 'string' ? props.view : 'overview'"],
+  ['没库时给一句话让人甩给 AI', '还没有库。把这句话甩给你的 AI：'],
+  ['没库那条提示词可复制', 'h(CopyButton, {'],
+  ['提示词指向包的 docs/AGENTS.md（不抄正文）', 'raw.githubusercontent.com/xyzOvO/dsh-wiki-notes/main/docs/AGENTS.md'],
+  ['建库位置用宿主给的建议路径（数据盘）', 'buildPromptAt(suggestedPath)'],
+  ['没有建议路径时也不许指向 C 盘工作区', '别放在工作区所在的 C 盘'],
+  ['空目录是独立一态，不并进「已连接」', "connection === 'empty'"],
+  ['空目录要说清哪里空', '这个目录里一个 .md 都没有'],
+  ['空目录也给同一句可复制的提示词', 'buildPromptAt(suggestedPath)'],
 ]) {
   if (!source.includes(needle)) throw new Error(`面板缺页签：${label}（找不到 ${needle}）`)
   console.log('✓ 面板页签:', label)

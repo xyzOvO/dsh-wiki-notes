@@ -14,6 +14,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { EventEmitter } from 'node:events'
+import { execFileSync } from 'node:child_process'
 
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'wiki-notes-overview-'))
 process.env.DSH_WIKI_CONFIG = path.join(tmp, 'wiki-notes.config.json')
@@ -87,6 +88,12 @@ const state = await call('GET', '/state')
 const ov = state.json?.overview
 check('/state 回 200', state.status === 200, String(state.status))
 check('三态字段：已连接', state.json?.connection === 'connected', String(state.json?.connection))
+// 没库时面板要用这个路径拼「甩给 AI」的提示词，所以它必须由宿主给（客户端不许自己猜盘符）。
+check(
+  'state 带建议库位置（数据盘）',
+  typeof state.json?.suggestedRoot === 'string' && /Markdown-Wiki$/.test(state.json.suggestedRoot),
+  String(state.json?.suggestedRoot),
+)
 check('概览对象存在', ov !== null && typeof ov === 'object', JSON.stringify(ov))
 
 // ---------- 2. 页面数量 ----------
@@ -247,6 +254,50 @@ check('/open 文件不在要有话说', typeof ghostFile.json?.error === 'string
 const noPath = await call('POST', '/open', JSON.stringify({}))
 check('/open 缺 path 回 400', noPath.status === 400, String(noPath.status))
 delete process.env.DSH_WIKI_OPEN_DRYRUN
+
+// ---------- 连接第四态：目录在、但一个 .md 都没有 ----------
+// 「扫得动」不等于「库是健康的」。空目录若报成「已连接」，面板每项都显示 0，
+// 看起来一切正常，而模型随后会说「你笔记里没有这条」——一句没法追责的假话。
+const emptyDir = path.join(tmp, 'empty-wiki')
+mkdirSync(emptyDir, { recursive: true })
+const emptyProbe = execFileSync(
+  process.execPath,
+  [
+    '--input-type=module',
+    '-e',
+    `
+    const { EventEmitter } = await import('node:events')
+    process.env.DSH_WIKI_CONFIG = ${JSON.stringify(path.join(tmp, 'wiki-notes.config.json'))}
+    let handler = null
+    const ctx = {
+      logger: { info() {}, warn() {} },
+      on() {},
+      webServer: { register: (d) => { handler = d.handler; return () => {} } },
+      tools: { register: () => () => {} },
+    }
+    const { apply } = await import(${JSON.stringify(new URL('../lib/index.js', import.meta.url).href)})
+    apply(ctx, { root: ${JSON.stringify(emptyDir)} })
+    const req = new EventEmitter()
+    req.method = 'GET'
+    req.url = '/api/wiki-notes/state'
+    req.headers = {}
+    const res = { statusCode: 0, setHeader() {}, end() {} }
+    const raw = await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('超时')), 20000)
+      res.end = (b) => { clearTimeout(t); resolve(b) }
+      handler(req, res).catch(reject)
+      req.emit('end')
+    })
+    const j = JSON.parse(raw)
+    console.log(JSON.stringify({ ok: j.ok, connection: j.connection, pages: j.stats?.pages }))
+    `,
+  ],
+  { encoding: 'utf8' },
+)
+const emptyState = JSON.parse(emptyProbe.trim().split('\n').pop())
+check('空目录不被报成「已连接」', emptyState.connection === 'empty', JSON.stringify(emptyState))
+check('空目录仍然 ok:true（扫是扫得动的）', emptyState.ok === true, JSON.stringify(emptyState.ok))
+check('空目录 pages=0', emptyState.pages === 0, JSON.stringify(emptyState.pages))
 
 
 process.stdout.write(`  overview ${total - failed}/${total}\n`)

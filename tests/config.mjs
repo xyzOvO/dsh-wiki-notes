@@ -9,7 +9,9 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'no
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
+  DEFAULT_WIKI_ROOT,
   PROMPT_MAX_CHARS,
+  SUGGESTED_WIKI_ROOT,
   mergePromptConfig,
   mergeTopicConfig,
   normalizeCallsConfig,
@@ -132,6 +134,17 @@ const callsLog = normalizeCallsConfig({ log: '  /tmp/x.jsonl  ' })
 check('calls 配置：log 去空白', callsLog.log === '/tmp/x.jsonl', JSON.stringify(callsLog))
 check('calls 配置：非对象返回 null', normalizeCallsConfig(null) === null && normalizeCallsConfig([1]) === null)
 check('calls 配置：读不到时给默认值', readCallsConfig('/不存在的目录').enabled === true)
+
+// 库默认位置：建议在数据盘（D 盘优先），但「建议」不等于「默认生效」。
+// 这一对断言防的是退化成「未配置也扫一个不存在的目录」——那会扫出 0 页，
+// 模型随后会说「你笔记里没有这条」，一句没法追责的假话。
+check('建议位置落在数据盘（win32 上不是 C 盘）', process.platform !== 'win32' || !SUGGESTED_WIKI_ROOT.startsWith('C:'), SUGGESTED_WIKI_ROOT)
+check('建议位置名字是 Markdown-Wiki', /Markdown-Wiki$/.test(SUGGESTED_WIKI_ROOT), SUGGESTED_WIKI_ROOT)
+check(
+  '默认值只在建议位置真的存在时才生效',
+  DEFAULT_WIKI_ROOT === (existsSync(SUGGESTED_WIKI_ROOT) ? SUGGESTED_WIKI_ROOT : ''),
+  `${SUGGESTED_WIKI_ROOT} → default=${JSON.stringify(DEFAULT_WIKI_ROOT)}`,
+)
 
 if (failed > 0) {
   process.stderr.write(`config smoke 失败 ${failed} 项\n`)

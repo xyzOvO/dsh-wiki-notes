@@ -26,41 +26,29 @@
 
 | 你想知道 | 直接跳 |
 | --- | --- |
-| 我连库都还没有 | [从零到能查](#从零到能查第一次用看这个) |
+| 我连库都还没有 | [从零到能查](#从零到能查) |
 | 这插件到底能干什么 | [四个工具](#四个工具) |
 | 左侧栏那本书点开是什么 | [知识库页（左侧栏）](#知识库页左侧栏) |
 | 我要先装上试试 | [装](#装) · [配](#配) |
 | 我自己的笔记该怎么写 | [库该长什么样](#库该长什么样) |
 | 检索为什么这么打分 | [检索质量](#检索质量) |
 | 它有没有偷看我的东西 | [只读，且不往外发](#只读且不往外发) |
-| 旧版本有没有遗留 | [发布物与残余风险](#发布物与残余风险) |
 | 已知毛病 | [已知局限](#已知局限) |
 | 要改代码 | [目录 / 开发](#目录--开发) |
 
 ---
 
-## 从零到能查（第一次用看这个）
+## 从零到能查
 
-一句话把分工说清楚：**插件只读。建库、维护、回写都由 AI 加你写下的规则做。**
+1. 装好插件，点左侧栏那本书。**没库时它会给你一句话**，复制这句话甩给 AI。
+2. AI 照 [docs/AGENTS.md](docs/AGENTS.md) 建库 —— 三层目录、总览、索引、日志，然后收你给的第一篇资料。规则全在那一个文件里，复制到库根就是库里那份 `AGENTS.md`。
+3. 库建好就完事：默认位置 `D:\Markdown-Wiki` 会被插件自动认到。建在别处的话，在 `设置 → 知识库` 填上那个文件夹。
 
-这个仓库带了一整套上手材料，不是只有代码：
+分工只有一句：**插件只读；建库、维护、回写都由 AI 加那份规则做。**
 
-| 你要做的事 | 看哪儿 |
-| --- | --- |
-| 建一个库（让 AI 帮你搭） | [使用指南](docs/使用指南.md) §1–§3 + [P1 提示词](docs/prompts/p1-搭骨架.md) |
-| 给库立规矩 | [AGENTS.md 模板](docs/templates/AGENTS.md) —— 200 行，复制到库根就能用 |
-| 往里放资料 | [P3 摄入](docs/prompts/p3-摄入.md)（一次一两篇，重点是「整合」那一步） |
-| 定期体检 | [P4 体检](docs/prompts/p4-体检.md)（含「让 AI 给自己造工具」） |
-| 接上插件 | 本页 [装](#装) · [配](#配) |
-| 分享前脱敏 | [P6 脱敏](docs/prompts/p6-脱敏.md) |
+库默认建在数据盘：`D:\Markdown-Wiki`（没有 D 盘就用 `E:` / `F:`，都没有才退回主目录）。**不建在工作区所在的 C 盘** —— 库是私人资料，不该和工作区、`node_modules`、git 仓库共用同一片事故面。
 
-三条路，看你此刻在哪：
-
-- **连库都没有** → 读 [使用指南](docs/使用指南.md)，一小时走完前五节，第六节才轮到插件。
-- **已经有 Markdown 笔记** → 看 [库该长什么样](#库该长什么样)，字段补齐就能用；缺的规矩用 [AGENTS.md 模板](docs/templates/AGENTS.md) 补。
-- **只想先看看效果** → `node bin/cli.mjs search 菜刀 --root examples/flat-wiki`（随包的零结构示例库）。
-
-那份 200 行模板里最值钱的四样（细节见 [使用指南](docs/使用指南.md) §3）：**会话开场四步**（AI 如何接管一个陌生库）、**别名三条硬规则**（英文检索的唯一入口）、**状态四档与升档判据**（多数人只定档位不定怎么升，于是全停在草稿）、**边界六条**（永不改原始资料、永不物理删除、改动必记日志）。它比任何提示词都硬——它决定 AI 每天怎么对待你的库。
+已经有 Markdown 笔记的话，跳过第 2 步：把 `AGENTS.md` 放进库根，字段按它第 5 节补齐就能用（缺字段只是那一路加分失效，不报错）。只想先看看效果：`node bin/cli.mjs search 菜刀 --root examples/flat-wiki`。
 
 ---
 
@@ -187,7 +175,7 @@ status · fallback · considered · warnings · topScore
 
 ## 库该长什么样
 
-**一个目录 + 一堆 `.md` 就能用。** 完整的字段与文件规格见 [使用指南 附录 B](docs/使用指南.md#附录-b--插件认的字段与文件规格速查)：frontmatter 七字段（英文写法 `title/type/tags/aliases/status/created/updated/sources` 也认）、`index.md` 摘要目录、`log.md` 时间线、`总览-overview.md`，满足得越多检索越准，缺了只是那一路加分失效、不报错。**推荐的完整结构长什么样、为什么要那么分，见 [使用指南](docs/使用指南.md) 第 1 节。** 可跑的样例：`examples/sample-wiki/`（6 页带索引）、`examples/demo-wiki/`（10 页带红链与别名）、`examples/flat-wiki/`（8 页平铺零字段）。
+**一个目录 + 一堆 `.md` 就能用。** 完整的字段与文件规格见 [docs/AGENTS.md](docs/AGENTS.md) 第 1、2、5 节：frontmatter 七字段（英文写法 `title/type/tags/aliases/status/created/updated/sources` 也认）、`index.md` 摘要目录、`log.md` 时间线、`总览-overview.md`，满足得越多检索越准，缺了只是那一路加分失效、不报错。可跑的样例：`examples/sample-wiki/`（6 页带索引）、`examples/demo-wiki/`（10 页带红链与别名）、`examples/flat-wiki/`（8 页平铺零字段）。
 
 路径指到上一层（比如 `我的库/`，里面还有 `原始资料-raw/` 和 `知识层-wiki/`）也没关系：插件会认 `index.md`，自动下钻到知识层，并在返回里注明它实际读的是哪一层。
 
@@ -231,7 +219,7 @@ WIKI_ROOT="<仓库绝对路径>/examples/demo-wiki" node tools/verify-host.mjs -
 | 1 | 插件 config 的 `root` |
 | 2 | 环境变量 `DSH_WIKI_ROOT` |
 | 3 | `wiki-notes.config.json`（设置页写这里） |
-| 4 | `lib/config.js` 的 `DEFAULT_WIKI_ROOT`（默认空） |
+| 4 | `lib/config.js` 的 `DEFAULT_WIKI_ROOT`（建议位置 `D:\Markdown-Wiki` 存在时自动生效；不存在就算未配置） |
 
 设置页改的路径写入第 3 层；若第 1 层 `config.root` 或第 2 层 `DSH_WIKI_ROOT` 正在覆盖，界面会明确提示「保存也盖不过它」，保存后也不会谎称「已保存并生效」。优先级本身保持不变。
 
@@ -389,24 +377,6 @@ WIKI_ROOT="<仓库绝对路径>/examples/demo-wiki" node tools/verify-host.mjs -
 - 插件只读你的笔记：不写库、不改页、不修红链。
 - 检索在本地进程内跑，没有任何出站请求。
 - `wiki_context` / `wiki_verify` 调的是**你自己机器上的** Python 管线（`bridge.toolsRoot`），同样不出网。
-- 仓库里不含任何本机绝对路径或用户名；测试用环境变量拿真实路径（`WIKI_ROOT` / `WIKI_TOOLS`），不给就跑样例库。
-- 公开仓库里的样例、契约文档与测试查询词一律用虚构语料，不写任何人的笔记主题。旧发布物仍有遗留，见下一节。
-
----
-
-## 发布物与残余风险
-
-**1.4.3 起是干净版本。** 仓库内 `docs/`（整目录进 `files`）、`examples/`、`tests/` 里的演示样例已全部换成虚构的「星港缓存」技术语料：没有真实引文、真实页面路径、外链、本机用户名、私有路径或凭据。发版前会解包 `npm pack` 的产物逐文件扫一遍，命中即视为发布失败。`wiki-notes.config.json` 是本机文件，`.gitignore` 覆盖，从未提交。
-
-**1.4.2 及更早的公开传播源已经发出去了，收不回来：**
-
-| 来源 | 情况 | 处置 |
-| --- | --- | --- |
-| npm `1.4.0` / `1.4.1` / `1.4.2` | 包内 `docs/契约-stage0/samples/` 与几份阶段文档含少量早期演示用的笔记引文、页面标题和一个外部链接；**不含**凭据、用户名、本机路径，也不是运行时采集的数据 | npm 不允许覆盖已发布版本 ⇒ 只把这三个版本标记 `deprecated`，提示升级到 `>=1.4.3`（更早的干净版本不误伤） |
-| GitHub Release `v1.4.0` / `v1.4.1` / `v1.4.2` 的 tarball | 与对应 npm 包同源 | 不删 Release 记录，只删带内容的 tarball 资产；取包用 `v1.4.3` 或 `releases/latest/download/dsh-wiki-notes.tgz` |
-| Git 历史 `36cfe85` 与标签 `v1.4.0`–`v1.4.2` 自动生成的源码归档 | `36cfe85` 曾写进本机绝对路径与用户名，`f82b125` 已在首个 1.4.0 npm 包发布**之前**清掉；但历史对象与标签归档仍在 | 不重写历史：改 tag SHA 会断掉已发 npm 包与 Release 的提交关联。在意的话请自行 fork 后清理 |
-
-一句话结论：**升级到 `1.4.3+` 即可**；旧版本里那部分内容不会自行消失，别把旧包当「干净语料」再分发。这里只做事实登记，不假装把它们删干净了。
 
 ---
 
@@ -446,9 +416,7 @@ tools/probe.mjs 检索质量探针：hit@1 / hit@3 / Recall@5，追加趋势 CSV
 tools/preview.mjs 把面板渲染成静态页（真组件 + 真 CSS），改样式不必重启 DSH
 tools/verify-host.mjs 宿主实机验收：--self 自己起个真 HTTP 服务打 10 项探针，--port 探已在跑的 DSH
 tools/verify-bridge.mjs 真管线体检：起一次 Python 桥，断言两个引擎都活着、没被标降级
-docs/使用指南.md  从零建库的完整流程（第一次用看这份）
-docs/templates/AGENTS.md  库里那份规则文件的模板（200 行，复制即用）
-docs/prompts/  六份可复制的提示词（搭骨架 / 立规则 / 摄入 / 体检 / 查询 / 脱敏）
+docs/AGENTS.md  给 AI 的库规则（建库、摄入、体检、边界，复制到库根即用）
 docs/README.md  文档导航页
 CHANGELOG.md    版本变更记录
 docs/superpowers/specs/  检索面板的设计稿
@@ -456,7 +424,7 @@ docs/契约-stage0/  知识网关的设计与验收记录
 examples/       可跑的最小样例库
 tests/          smoke / status / lint / explain / api / help / contract / watch / client
                 / tier / render / bridge / store / calls / calls-read / gateway
-tests/local/    作者本机的评测集与回归基线（query 与基线文件不入仓库，只留 *.example）
+tests/local/    本机私有的评测集与回归基线（query 与基线文件不入仓库，只留 *.example）
 tests/support/  测试用小工具（quiet-ledger：把账本重定向到临时目录，别写进你的调用记录）
 ```
 
@@ -481,34 +449,13 @@ node tools/verify-bridge.mjs                       # 真管线体检：两个引
 WIKI_ROOT="/path/your/知识层-wiki" WIKI_TOOLS="/path/your/工具-tools" node tests/gateway.mjs
 ```
 
-发版：改 `version` → `npm test` 全绿（`scripts.test` 只串跑 `node tests/*.mjs`，29 个文件；`node --run test` 要 Node 22+，别在低版本上用它，也别拿它当门槛的证明）→ `npm pack --dry-run` 看一眼打包内容（`files` 只含 `lib`/`bin`/`docs`/`examples`/`README.md`/`CHANGELOG.md`/`LICENSE`/`cordis.patch.yml`，`preview/` 与 `tools/` 与 `tests/` 都不进包）→ **显式** `npm publish --registry=https://registry.npmjs.org/`。发布前先 `npm whoami --registry=https://registry.npmjs.org/` 确认已登录（本机 token 在 `.npmrc` 的 `//registry.npmjs.org/:_authToken=`；注意 `npm config get registry` 指向 npmmirror，而 npmmirror 那边不认这个 token，登录状态要显式指定 registry 去查）。发完要当场核三件事：`npm view <pkg>@<ver> dist.tarball` 取回的地址（带 fresh cache 与 REST cachebust）、下载 tarball 对 SHA256、`gh release list` 里该版本是不是 Latest（`gh release view --json isLatest` 不是可用字段）。
-
-打包进了你的笔记标题怎么办：`tests/local/` 的 query 集、分歧白名单、回归基线与 `calls.jsonl` / `governance.jsonl` / `probe-history.csv` 都在 `.gitignore` 里，只在本机跑；`tests/local/_*.mjs` 这类写死本机路径的只读体检脚本也一样。发版前用 `git diff --cached | grep -E '<用户名>|<库路径>|<真实页名>'` 过一遍暂存区，再解包 `npm pack` 产物逐文件扫一遍；命中就改口径再提交。
+发版：改 `version` → `npm test` 全绿 → `npm pack --dry-run` 看一眼打包内容（`files` 只含 `lib`/`bin`/`docs`/`examples`/`README.md`/`CHANGELOG.md`/`LICENSE`/`cordis.patch.yml`，`preview/` 与 `tools/` 与 `tests/` 都不进包）→ 显式指定 registry 发布：`npm publish --registry=https://registry.npmjs.org/`。发完当场核三件事：`npm view <pkg>@<ver> dist.tarball` 取回的地址、下载 tarball 对 SHA256、`gh release list` 里该版本是不是 Latest。
 
 改样式的两条经验：
 
 - `.wn-hit-row` 那道 span 不能省。`<summary>` 自带 display 规则，某些浏览器会把 `display:flex` 顶掉，行就塌成内容宽度、分数贴在标题右边 —— 所以行布局放在 summary 里那层 span 上，`tests/client.mjs` 守着它。
 - 小字别用 `--wn-faint`（这组 token 在浅色底上约 3.4:1，低于 WCAG AA 的 4.5），小字一律 `--wn-muted`（约 5:1），层级靠字号和字重拉开，不靠把字调淡。
 - `--diag` 遍历样式表时，别用「有 `cssRules` 就往下钻」的写法：现代 Chrome 的 `CSSStyleRule` 自己也带一个空的 `cssRules`（CSS 嵌套），会把你正要找的那条规则跳过，于是明明 `display=flex` 却报「NOT FOUND」。先判 `rule.cssRules.length`。
-
-## 隐私：仓库里不该出现的东西
-
-这个插件要读的是**别人自己的笔记库**，所以「作者的本机」尤其不该混进发布物。分两类看：
-
-**机器本地产物，靠 `.gitignore` 挡**：`calls.jsonl`（调用账本）、`visits.jsonl`（访问账本，1.8.3 后已停用）、`governance.jsonl`（观察事件）、`wiki-notes.config.json`（本机库路径）、`preview/`（预览产物）、`tests/local/`（含真实页名的回归基线）。
-
-> `visits.jsonl` 曾经被误提交过一版（63 行真实页名），先用 `git rm --cached` 撤出跟踪，随后在 2026-11-17 用 `git filter-repo --path visits.jsonl --invert-paths` 把它从**全部历史**里抹掉了：现在任何 ref 都不含这个文件，代价是 `main` 与 `v1.8.3`–`v1.11.2` 这 9 个 tag 的提交号全部改变（更早的 tag 不受影响）。
->
-> 由此产生的两件事：**旧的克隆会与新历史分叉**，需要重新 clone；文档里 1.8.3 之后引用过的短提交号，对应的是已经不存在的提交（对照表见 CHANGELOG `## 1.11.3`）。GitHub 侧可能仍按旧对象 SHA 暂存一段时间，直到它自己的 GC 跑过。
-
-**默认值，`.gitignore` 挡不住**，只能靠看：默认库路径、默认查询词、默认示例、默认夹具里的标签名、`package.json` 的 `description`、工具说明 `DESCRIPTION`。这些「长得像正常代码」，所以每次发版都拿 `grep` 扫一遍：
-
-```bash
-grep -rIl --exclude-dir=.git --exclude-dir=local --exclude-dir=history --exclude-dir=preview \
-  -e '<你的库名>' -e '<你的主题词>' . 
-```
-
-截图同理：`docs/*.png` 一律用随包的 `examples/demo-wiki` 渲真组件截图，不用真实笔记库 —— 「真实库长什么样」本身就带页名、标签、枢纽页。
 
 ## License
 
