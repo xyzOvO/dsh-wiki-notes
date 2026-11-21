@@ -216,6 +216,17 @@ JSON.stringify(callsEmpty.json?.governance?.assertion_measurement))
 check('/calls?days=3 窗口可覆盖', (await call('GET', '/calls?days=3')).json?.governance?.window?.days === 3,
   JSON.stringify((await call('GET', '/calls?days=3')).json?.governance?.window))
 
+// Context↔Verify 链配对：路由要能返回 pairs 数组，并回显 limit
+const pairsRoute = await call('GET', '/governance/pairs')
+check('/governance/pairs 回 200 且 pairs 是数组', pairsRoute.status === 200 && Array.isArray(pairsRoute.json?.pairs),
+  JSON.stringify(pairsRoute.json)?.slice(0, 80))
+const pairsLimited = await call('GET', '/governance/pairs?limit=1')
+check('/governance/pairs?limit=1 回显 limit 且截断', pairsLimited.json?.limit === 1
+  && (pairsLimited.json?.pairs ?? []).length <= 1, JSON.stringify(pairsLimited.json)?.slice(0, 80))
+check('/governance/pairs 不泄漏页面路径/引文', (pairsRoute.json?.pairs ?? []).every((p) =>
+  JSON.stringify(p).indexOf('.md') === -1 && p.page === undefined && p.quote === undefined),
+  JSON.stringify(pairsRoute.json?.pairs)?.slice(0, 80))
+
 // 上面那一串 /search 已经在记账了：面板手查的 source 必须是 panel
 const callsAfter = await call('GET', '/calls')
 const panelRows = (callsAfter.json?.rows ?? []).filter((row) => row.source === 'panel')

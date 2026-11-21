@@ -200,6 +200,31 @@ for (const [label, needle] of callGuards) {
   console.log('✓ 调用页守卫:', label)
 }
 
+// ---- 配对视图文案守卫：界面要说人话，不许再满屏术语与流水号 ----
+const pairGuards = [
+  ['配对视图标题说人话', '问答批改记录'],
+  ['顶部说明说人话', '每次回答后系统都会检查一遍'],
+  ['支持度 partial 翻成人话', "if (support === 'partial') return '不全（只有摘要）'"],
+  ['支持度 sufficient 翻成人话', "if (support === 'sufficient') return '够用（有原文依据）'"],
+  ['违规族：编造引用', "if (t === 'fabricated_quote') return '把摘要当原文引用'"],
+  ['违规族：条件限定', "if (t === 'conditional_limit_missing') return '没说清适用条件'"],
+  ['违规族：数字无依据', "if (t === 'unsupported_numeric_claim') return '数字没依据'"],
+  ['同类违规合并成 ×N', "counts[label] > 1 ? label + ' ×' + counts[label] : label"],
+  ['已收敛说人话', "'✅ 改对了'"],
+  ['未收敛说人话', "'还没改对'"],
+  ['轮次说人话', "'第 ' + String(r.attempt_seq) + ' 次'"],
+  ['通过状态说人话', "if (status === 'ok') return '✅ 通过，没问题'"],
+  ['违规状态说人话', "if (status === 'violations_found') return '❌ 没通过'"],
+]
+for (const [label, needle] of pairGuards) {
+  if (!source.includes(needle)) throw new Error(`配对视图文案缺项：${label}（找不到 ${needle}）`)
+  console.log('✓ 配对文案守卫:', label)
+}
+if (source.includes("'观察 ' + pair.observe_id")) {
+  throw new Error('观察号应该藏起来，不该再显示在配对视图里')
+}
+console.log('✓ 配对视图不再显示观察流水号')
+
 console.log('✓ CSS 已注入，长度:', (styleNodes.get('dsh-wiki-notes-styles')?.textContent ?? '').length)
 console.log('✓ effect 清理函数数量:', cleanups.length)
 for (const item of cleanups) {

@@ -254,6 +254,67 @@ ok('首次违规后没有后续有效复核 → not_rechecked，不是 unresolve
   assert.equal(s.convergence.converged, 0)
 })
 
+// 15. 配对视图：按 context_id 把 context 与多轮 verify 链在一起
+ok('readPairs 把一份 context 与多轮 verify 配成一条链，且不含引文/页面', () => {
+  const { gov } = makeGov()
+  gov.recordContext(ctx('ctx_PAIR1'))
+  gov.recordVerify('ctx_PAIR1', verify('violations_found', { violations: [{ type: 'fabricated_quote' }, { type: 'fabricated_quote' }] }))
+  gov.recordVerify('ctx_PAIR1', verify('ok'))
+  const pairs = gov.readPairs({ limit: 20 })
+  assert.equal(pairs.length, 1)
+  const p = pairs[0]
+  assert.equal(p.context_id, 'ctx_PAIR1')
+  assert.equal(p.support, 'partial')
+  assert.ok(p.required_check_count > 0)
+  assert.equal(p.verify_rounds.length, 2)
+  assert.equal(p.verify_rounds[0].status, 'violations_found')
+  assert.deepEqual(p.verify_rounds[0].violation_types, ['fabricated_quote', 'fabricated_quote'])
+  assert.equal(p.verify_rounds[1].status, 'ok')
+  assert.equal(p.converged, true)
+  // 配对只带元数据，不泄漏证据原文 / 页面路径 / 引文
+  const text = JSON.stringify(p)
+  for (const page of fixture.evidence ?? []) {
+    if (page.page) assert.ok(!text.includes(String(page.page)), '配对泄漏了页面路径')
+    if (page.title) assert.ok(!text.includes(String(page.title)), '配对泄漏了页面标题')
+  }
+  for (const item of fixture.evidence_items ?? []) {
+    if (item.quote) assert.ok(!text.includes(String(item.quote)), '配对泄漏了引文')
+  }
+})
+
+// 16. 未核验的 context 也进配对，轮次为空
+ok('readPairs 保留没有 verify 的 context，轮次为空、未收敛', () => {
+  const { gov } = makeGov()
+  gov.recordContext(ctx('ctx_PAIR2'))
+  const pairs = gov.readPairs({ limit: 20 })
+  assert.equal(pairs.length, 1)
+  assert.equal(pairs[0].verify_rounds.length, 0)
+  assert.equal(pairs[0].converged, false)
+})
+
+// 17. 不可用 verify 作为一轮显示，带 unusable 原因
+ok('readPairs 把不可用 verify 记为一轮并带原因', () => {
+  const { gov } = makeGov()
+  gov.recordContext(ctx('ctx_PAIR3'))
+  gov.recordVerify('ctx_PAIR3', verify('context_missing'))
+  const pairs = gov.readPairs({ limit: 20 })
+  const rounds = pairs[0].verify_rounds
+  assert.equal(rounds.length, 1)
+  assert.equal(rounds[0].status, 'context_missing')
+  assert.equal(pairs[0].converged, false)
+})
+
+// 18. limit 截断 + 新 context 在前
+ok('readPairs 按时间倒序取最近 N 对', () => {
+  const { gov, advance } = makeGov()
+  gov.recordContext(ctx('ctx_OLD'))
+  advance(1000)
+  gov.recordContext(ctx('ctx_NEW'))
+  const pairs = gov.readPairs({ limit: 1 })
+  assert.equal(pairs.length, 1)
+  assert.equal(pairs[0].context_id, 'ctx_NEW')
+})
+
 rmSync(tmp, { recursive: true, force: true })
 console.log(`[governance] ${total - failed}/${total} 通过`)
 if (failed > 0) process.exit(1)
