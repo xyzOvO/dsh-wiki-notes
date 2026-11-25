@@ -80,6 +80,12 @@ function call(method, route, rawBody, headers = {}) {
 }
 
 const readCfg = () => JSON.parse(readFileSync(configFile, 'utf8'))
+const lastCallFromProbe = () => {
+  if (!existsSync(callsProbe)) return null
+  const lines = readFileSync(callsProbe, 'utf8').split('\n').filter(Boolean)
+  if (lines.length === 0) return null
+  try { return JSON.parse(lines.at(-1)) } catch { return null }
+}
 
 // 0. 先把库路径保存进去（正常路径）
 const saved = await call('POST', '/save', JSON.stringify({ root: wiki }))
@@ -223,9 +229,64 @@ check('/governance/pairs 回 200 且 pairs 是数组', pairsRoute.status === 200
 const pairsLimited = await call('GET', '/governance/pairs?limit=1')
 check('/governance/pairs?limit=1 回显 limit 且截断', pairsLimited.json?.limit === 1
   && (pairsLimited.json?.pairs ?? []).length <= 1, JSON.stringify(pairsLimited.json)?.slice(0, 80))
+// 回显的 limit 必须与 readPairs 实际采用的上限一致，不能报 1000 却只给 200
+const pairsOverLimit = await call('GET', '/governance/pairs?limit=1000')
+check('/governance/pairs?limit=1000 回显夹紧到 200', pairsOverLimit.json?.limit === 200,
+  JSON.stringify(pairsOverLimit.json)?.slice(0, 80))
+check('/governance/pairs?limit=1000 返回条数不超过 200',
+  (pairsOverLimit.json?.pairs ?? []).length <= 200,
+  String((pairsOverLimit.json?.pairs ?? []).length))
 check('/governance/pairs 不泄漏页面路径/引文', (pairsRoute.json?.pairs ?? []).every((p) =>
   JSON.stringify(p).indexOf('.md') === -1 && p.page === undefined && p.quote === undefined),
   JSON.stringify(pairsRoute.json?.pairs)?.slice(0, 80))
+
+// Bridge 成功分支（HTTP/exit=0）也可能吐出错误信封；不许把它当正常结果往下传。
+// 用一个「假 Python」脚本让 bridge.js 的 stdout 解析成功分支原样拿到错误信封。
+{
+  const fakeTools = mkdtempSync(path.join(os.tmpdir(), 'api-bridge-envelope-'))
+  writeFileSync(
+    path.join(fakeTools, 'wiki_bridge.py'),
+    'process.stdin.resume();process.stdout.write(JSON.stringify({ok:false,error:{code:"E_INTERNAL",message:"网关内部错误"}}))',
+    'utf8',
+  )
+  const envelopeConfigFile = path.join(fakeTools, 'wiki-notes.config.json')
+  writeFileSync(envelopeConfigFile, JSON.stringify({
+    root: wiki,
+    bridge: { python: process.execPath, toolsRoot: fakeTools, timeoutMs: 15000 },
+  }), 'utf8')
+
+  const registered = new Map()
+  const envelopeCtx = {
+    logger: { info() {}, warn() {} },
+    on() {},
+    webServer: { register: () => () => {} },
+    tools: {
+      register: (definition) => {
+        registered.set(definition.name, definition)
+        return () => registered.delete(definition.name)
+      },
+    },
+  }
+  const prevConfig = process.env.DSH_WIKI_CONFIG
+  process.env.DSH_WIKI_CONFIG = envelopeConfigFile
+  let envelopeApply
+  try {
+    envelopeApply = (await import(`../lib/index.js?envelope=${Date.now()}`)).apply
+    envelopeApply(envelopeCtx, {})
+    const observeResult = await registered.get('wiki_observe').execute({ days: 7 })
+    check('错误信封（ok:false）走拒绝路径而不是成功统计',
+      observeResult?.kind === 'error' && observeResult?.error?.code === 'E_INTERNAL',
+      JSON.stringify(observeResult)?.slice(0, 160))
+    const envelopeCall = lastCallFromProbe()
+    check('错误信封路径记账标为失败',
+      envelopeCall?.tool === 'wiki_observe' && envelopeCall?.ok === false,
+      JSON.stringify(envelopeCall)?.slice(0, 160))
+  } finally {
+    if (prevConfig === undefined) delete process.env.DSH_WIKI_CONFIG
+    else process.env.DSH_WIKI_CONFIG = prevConfig
+  }
+  rmSync(fakeTools, { recursive: true, force: true })
+}
 
 // 上面那一串 /search 已经在记账了：面板手查的 source 必须是 panel
 const callsAfter = await call('GET', '/calls')

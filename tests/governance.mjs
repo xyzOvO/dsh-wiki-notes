@@ -315,6 +315,13 @@ ok('readPairs 按时间倒序取最近 N 对', () => {
   assert.equal(pairs[0].context_id, 'ctx_NEW')
 })
 
+// 19. days 上限与工具 schema 一致：超过 365 要夹紧，不能悄悄放到 3650
+ok('stats 的 days 上限夹紧到 365（与 wiki_observe schema 一致）', () => {
+  const { gov } = makeGov()
+  assert.equal(gov.stats({ days: 1000 }).window.days, 365)
+  assert.equal(gov.stats({ days: 365 }).window.days, 365)
+})
+
 rmSync(tmp, { recursive: true, force: true })
 console.log(`[governance] ${total - failed}/${total} 通过`)
 if (failed > 0) process.exit(1)

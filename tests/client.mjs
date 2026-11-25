@@ -39,6 +39,7 @@ const documentStub = {
 }
 
 let loaded = null
+let makePreview = null
 const windowStub = {
   __ModuleLoader__: {
     load(definition) {
@@ -64,10 +65,12 @@ new Function('window', 'document', source)(windowStub, documentStub)
 if (loaded === null) throw new Error('client.js 没有调用 __ModuleLoader__.load')
 console.log('✓ 模块 id:', loaded.id)
 
-const moduleExports = loaded.factory((name) => {
+const loadPreview = () => loaded.factory((name) => {
   if (name === 'react') return React
   throw new Error('未知依赖：' + name)
 })
+makePreview = loadPreview
+const moduleExports = loadPreview()
 
 console.log('✓ 导出 name:', moduleExports.name)
 console.log('✓ 导出 inject:', JSON.stringify(moduleExports.inject))
@@ -203,7 +206,7 @@ for (const [label, needle] of callGuards) {
 // ---- 配对视图文案守卫：界面要说人话，不许再满屏术语与流水号 ----
 const pairGuards = [
   ['配对视图标题说人话', '问答批改记录'],
-  ['顶部说明说人话', '每次回答后系统都会检查一遍'],
+  ['顶部说明说人话', '这里只记录先查库再下结论的问答，并且要开启记录开关才会记。'],
   ['支持度 partial 翻成人话', "if (support === 'partial') return '不全（只有摘要）'"],
   ['支持度 sufficient 翻成人话', "if (support === 'sufficient') return '够用（有原文依据）'"],
   ['违规族：编造引用', "if (t === 'fabricated_quote') return '把摘要当原文引用'"],
@@ -452,6 +455,46 @@ for (const needle of ['wn-copy-query', '.wn-copy-query{', 'wn-cite-copy:focus-vi
 }
 console.log('✓ 复制查询词：按钮可渲染，样式与焦点可见')
 
+// 10b) 复制失败不许假装成功：剪贴板不可用时按钮必须保持原文案。
+// 不能只查源码字符串：要把 setState 换成真会改值的版本，真的点一下看按钮文案。
+{
+  const originalUseState = React.useState
+  const originalNavigator = globalThis.navigator
+  try {
+    let copied = false
+    let unsupported = false
+    let copyUseCount = 0
+    React.useState = (initial) => {
+      const slot = copyUseCount++ % 2 === 0 ? 'copied' : 'unsupported'
+      const get = () => slot === 'copied' ? copied : unsupported
+      const set = (next) => {
+        const value = typeof next === 'function' ? next(get()) : next
+        if (slot === 'copied') copied = value
+        else unsupported = value
+      }
+      return [get(), set]
+    }
+    delete globalThis.navigator
+    const copyPreview = makePreview().__preview
+    let copyTree = flatten(copyPreview.CopyButton({ text: '上下文 预算', label: '复制词', doneLabel: '已复制' }))
+    if (String(copyTree[0].children) !== '复制词') throw new Error('复制前按钮文案应为「复制词」')
+    copyTree[0].props.onClick()
+    copyUseCount = 0
+    copyTree = flatten(copyPreview.CopyButton({ text: '上下文 预算', label: '复制词', doneLabel: '已复制' }))
+    if (copied || String(copyTree[0].children) === '已复制') {
+      throw new Error('剪贴板不可用却把按钮改成了「已复制」：复制失败不能假装成功')
+    }
+    if (!String(copyTree[0].props.title ?? '').includes('不支持复制')) {
+      throw new Error('复制失败要给用户一句 title 提示：当前环境不支持复制')
+    }
+    console.log('✓ 复制失败：剪贴板缺失时不显示「已复制」，只留提示')
+  } finally {
+    React.useState = originalUseState
+    if (originalNavigator === undefined) delete globalThis.navigator
+    else globalThis.navigator = originalNavigator
+  }
+}
+
 // 11) 治理观察指标面板：只查现行 governance 指标键 / 报表展示名称 / UI 标签。
 //    历史决策记录与标注历史口径不在这里检查；no_assertion 不产生也不展示。
 if (typeof preview.WikiGovernancePanel !== 'function') {
@@ -528,7 +571,7 @@ for (const [label, needle] of [
   ['每项带有效样本数', '有效样本：4'],
   ['每项带排除数', '排除：1'],
   ['每项带排除原因', '排除原因：restart_not_observed'],
-  ['观察是否启用', '观察是否启用：已启用 · 窗口 7 天'],
+  ['记录与治理是否启用', '记录与治理是否启用：已启用 · 窗口 7 天'],
   ['断言数量固定不可用', '断言数量：数据不可用'],
   ['收敛诊断独立命名', '观察到的核验链收敛率：已收敛 1 / 仍未收敛 0 / 未复核 1'],
   ['排除分层展示', '排除：样本 restart_not_observed 1 · Verify context_missing 1 · 迟到 Verify 1'],
@@ -556,7 +599,7 @@ const zeroGov = {
 }
 const zeroPanel = renderPanel({ governance: zeroGov })
 if (!zeroPanel.text.includes('0 次违规（0.0%）')) throw new Error('0 次违规没有单独展示')
-if (zeroPanel.text.includes('没有启用观察，因此没有数据')) throw new Error('有数据时误报「没有启用观察」')
+if (zeroPanel.text.includes('记录开关未启用，因此没有数据')) throw new Error('有数据时误报「记录开关未启用」')
 console.log('✓ 治理面板：0 次违规与「没有启用观察」是两种界面状态')
 
 const blank = () => ({
@@ -567,7 +610,7 @@ const disabledGov = {
   state: 'disabled',
   observe_enabled: false,
   window: { days: 7 },
-  message: '观察未启用，因此没有数据',
+  message: '记录开关未启用，因此没有数据',
   metrics: {
     required_check_verification_trigger_rate: { ...blank(), groups: { partial_insufficient: blank() } },
     effective_verify_violation_discovery_rate: blank(),
@@ -582,7 +625,7 @@ const disabledGov = {
   },
 }
 const offPanel = renderPanel({ governance: disabledGov })
-for (const needle of ['观察未启用，因此没有数据', '观察是否启用：未启用 · 窗口 7 天', '断言数量：数据不可用', '观察到的核验链收敛率：没有启用观察，因此没有数据']) {
+for (const needle of ['记录开关未启用，因此没有数据', '记录与治理是否启用：未启用 · 窗口 7 天', '断言数量：数据不可用', '观察到的核验链收敛率：记录开关未启用，因此没有数据']) {
   if (!offPanel.text.includes(needle)) throw new Error(`关闭态缺少：${needle}`)
 }
 for (const banned of ['0 次违规', '50.0%', '0.0%', '必核项 Context 核验触发率', 'no_assertion']) {
@@ -593,14 +636,14 @@ console.log('✓ 治理面板：关闭态不伪装成 0、不展示指标、不�
 
 // 后端没给 governance 时走 fallback，不能崩，也不能写成 0 违规。
 const fallbackPanel = renderPanel({ governance: null })
-if (!fallbackPanel.text.includes('没有启用观察，因此没有数据')) throw new Error('空 governance 没有 fallback 文案')
+if (!fallbackPanel.text.includes('记录开关未启用，因此没有数据')) throw new Error('空 governance 没有 fallback 文案')
 if (!fallbackPanel.text.includes('断言数量：数据不可用')) throw new Error('空 governance 丢了断言不可用口径')
 console.log('✓ 治理面板：governance 缺失时静默降级')
 
 for (const [label, needle] of [
   ['面板只挂在调用记录页签内', 'h(WikiGovernancePanel, { governance: state.governance })'],
   ['/calls 返回体的 governance 进 state', 'governance: data && data.governance'],
-  ['关闭勾选框旁写明破坏性清空', '关闭会清空现有记录与待核验状态，期间指标不可用'],
+  ['关闭勾选框旁写明一个开关管两本账', '记录开关同时控制检索调用记录与治理观察'],
   ['治理面板样式', '.wn-gov{'],
   // 分组行只许缩内边距：缩外框（margin-left）会把右边界一起推走，数字就对不齐上面三行。
   ['分组行不缩外框', '.wn-gov-row.wn-gov-sub{margin-left:0;padding-left:26px;'],
@@ -920,5 +963,87 @@ const staleTree = JSON.stringify(
 if (!staleTree.includes('重启一次 DSH')) throw new Error('宿主没给 overview 时没有说明要重启')
 if (!staleTree.includes('hx-stale')) throw new Error('退化提示没套样式，会混在正文里看不出来')
 console.log('✓ 概览组件：喂 /state 就出数，不自己算')
+
+// ---- 本轮前端缺陷修复守卫（全在 client.js，不许扩作用域） ----
+// 这些断言逐条对应八个用户可见缺陷；先写在这里跑红，再改实现转绿。
+console.log('\n-- 前端缺陷修复 --')
+
+// 2) 探索页链接输入框必须有 aria-label，不能只靠 placeholder 给读屏报名字。
+const exploreInputNeedle = "'aria-label': '页名'"
+if (!source.includes(exploreInputNeedle)) throw new Error('探索页链接输入框缺 aria-label（页名）')
+console.log('✓ 探索页输入：有 aria-label「页名」')
+
+// 3) 三处 tablist：tab 要 aria-controls、面板要 tabpanel + aria-labelledby、方向键可切换。
+for (const [label, needle] of [
+  ['tab 上有 aria-controls', "'aria-controls':"],
+  ['面板上有 aria-labelledby', "'aria-labelledby':"],
+  ['左方向键切页签', "event.key === 'ArrowLeft'"],
+  ['右方向键切页签', "event.key === 'ArrowRight'"],
+  ['统一的方向键导航助手', 'function tabKeyNav('],
+]) {
+  if (!source.includes(needle)) throw new Error(`tablist 无障碍缺件：${label}（找不到 ${needle}）`)
+}
+const tabpanelCount = source.split("role: 'tabpanel'").length - 1
+if (tabpanelCount < 3) throw new Error(`三处 tablist 只找到 ${tabpanelCount} 个 tabpanel 面板（至少要 3 个）`)
+console.log(`✓ 三处 tablist：aria-controls / ${tabpanelCount} 个 tabpanel / 左右方向键`)
+
+// 3b) 收尾打磨：小样本提示与 tab 面板用了专属类名就得有样式；清空按钮要写明不可撤销。
+for (const [label, needle] of [
+  ['小样本提示样式', '.wn-gov-sample{'],
+  ['tab 面板样式', '.wn-tabpanel{'],
+  ['清空按钮写明不可撤销', '确认清空？不可撤销'],
+]) {
+  if (!source.includes(needle)) throw new Error(`收尾打磨缺件：${label}（找不到 ${needle}）`)
+}
+console.log('✓ 收尾打磨：小样本/tab 面板样式 + 清空不可撤销')
+
+// 4) 检索防抖 timer 必须在组件卸载时清理，否则回调会在已死组件上 setState。
+// 提交 / 防抖 / 清空本来就各有 1 处清理（共 3 处）；只有组件卸载的 useEffect
+// cleanup 也清，才会出现第 4 处。次数守卫能抓出「看起来清了其实没在卸载时清」。
+const timerClearCount = source.split('clearTimeout(timerRef.current)').length - 1
+if (timerClearCount < 4) throw new Error(`检索 timer 没有卸载清理（只找到 ${timerClearCount} 处，含卸载清理应至少 4 处）`)
+console.log('✓ 检索防抖：组件卸载清 timer')
+
+// 5) 写操作连点被静默吞：飞行中必须禁用并记录开关 / 清空按钮，且给可见「处理中…」。
+for (const [label, needle] of [
+  ['写操作忙态是 state', "useState('')"],
+  ['清空按钮绑定 disabled', "disabled: actionBusy !== '' || confirmClear !== true"],
+  ['清空按钮飞行中显示处理中', "actionBusy !== '' ? '处理中…'"],
+  ['记录开关飞行中禁用', "disabled: actionBusy !== ''"],
+]) {
+  if (!source.includes(needle)) throw new Error(`写操作忙态缺件：${label}（找不到 ${needle}）`)
+}
+console.log('✓ 写操作：复选框/清空按钮飞行中 disabled + 可见忙态')
+
+// 6) 治理面板与「记录开关」术语断裂：一个开关同时管检索记录与治理观察。
+for (const [label, needle] of [
+  ['治理面板标题统一术语', '记录与治理（插件侧两本账，与 Python 观察日志分开）'],
+  ['治理面板说明一个开关管两本账', '记录开关同时控制检索调用记录与治理观察'],
+  ['关闭态不再单说「没有启用观察」', '记录开关未启用，因此没有数据'],
+  ['关闭状态不再单说「观察是否启用」', '记录与治理是否启用：未启用 · 窗口 '],
+  ['开启状态也不再单说「观察是否启用」', '记录与治理是否启用：已启用 · 窗口 '],
+]) {
+  if (!source.includes(needle)) throw new Error(`术语统一缺件：${label}（找不到 ${needle}）`)
+}
+console.log('✓ 治理术语：一个记录开关同时管两本账')
+
+// 7) 配对视图文案：只记录先查库再下结论的问答，且须开启记录开关。
+for (const [label, needle] of [
+  ['触发条件说清楚', '这里只记录先查库再下结论的问答，并且要开启记录开关才会记。'],
+  ['空态说清楚触发条件', '还没有批改记录。开启记录开关后，先查库再下结论的问答才会记在这里。'],
+]) {
+  if (!source.includes(needle)) throw new Error(`配对文案缺件：${label}（找不到 ${needle}）`)
+}
+console.log('✓ 配对视图：文案准确说明触发条件')
+
+// 8) 治理指标小样本护栏：每项百分比旁必须提示样本量；不是源码「仅供参考」碰巧出现就算数。
+for (const [i, needle] of [
+  '样本仅 4 条，仅供参考',
+  '样本仅 3 条，仅供参考',
+]) {
+  if (!onPanel.text.includes(needle)) throw new Error(`治理指标缺小样本护栏：${needle}`)
+}
+if (!source.includes('样本很少，仅供参考')) throw new Error('治理指标缺小样本兜底文案')
+console.log('✓ 治理指标：每项百分比旁有小样本提示')
 
 console.log('\nclient smoke 全部通过')
